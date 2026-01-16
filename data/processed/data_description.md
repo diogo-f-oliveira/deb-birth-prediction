@@ -1,0 +1,26 @@
+Column names:
+- `generator_species`: The species used to generate the seed parameters. Noise is added to these parameters to create diverse observations.
+- `point_id`: The identifier of the parameter set generated for the species
+- `z`: The zoom factor $z$ (-)
+- `v`: The energy conductance $\dot{v}$ (cm/d)
+- `kap`: The allocation fraction to soma $\kappa$ (-)
+- `E_G`: The specific cost for structure $[E_G]$ (J/cm³)
+- `p_M`: The volume-specific somatic maintenance costs $[\dot{p}_M]$ (J/d.cm³)
+- `E_Hb`: The maturity at birth $E_H^b$ (J)
+- `k_J`: The maturity maintenance rate coefficient $\dot{k}_J$ (1/d)
+- `f`: The scaled functional response $f$ (-)
+- `E_m`: The maximum reserve density $[E_m] = \{\dot{p}_{Am}\} / \dot{v}$ (J/cm³)
+- `k_M`: The somatic maintenance rate coefficient $\dot{k}_M = [\dot{p}_M] / [E_G]$ (1/d)
+- `p_Am`: The maximum specific assimilation rate $\{\dot{p}_{Am}\} = z [\dot{p}_M] / \kappa$ (J/d.cm²)
+- `g`: The energy investment ratio $g = [E_G] / (\kappa [E_m])$ (-)
+- `k`: The maintenance ratio $k = \dot{k}_J / \dot{k}_M$ (-)
+- `v_Hb`: The scaled maturity at birth $v_H^b = E_H^b \dot{k}_M / (p_Am L_m^3)$ (-)
+- `lb`: The scaled length at birth $l_b = L_b / z$ (-).
+- `tb`: The age at birth $t_b$ (d). It is the age at birth divided by $\dot{k}_M$.
+- `lb<f`: Whether the scaled length at birth is less than the functional response (True/False). It is True if $l_b < f$.
+- `k*vHb<c`: Condition for maturity maintenance at birth (True/False). It is True if $k v_H^b < l_b^2  (g + l_b) f/ (g + f)$.
+- `reached_birth`: Whether the simulated organism reached birth (True/False). This is the response. This is True if both conditions `lb<f` and `k*vHb<c` are True.
+- `success`: Whether the DEB model simulation ran successfully to completion (True/False)
+- `execution_time`: The time taken to run the DEB model simulation (seconds)
+- `error_message`: The message describing the error encountered during the DEB model simulation
+- `error_type`: The type of error encountered during the DEB model simulation
