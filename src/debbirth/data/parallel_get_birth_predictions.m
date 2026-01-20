@@ -7,7 +7,7 @@ format long
 %% Define paths to files
 
 allSpeciesFolder = "C:\Users\diogo\OneDrive - Universidade de Lisboa\Terraprima\DEB Resources\DEBtool\AmPdata\species";
-saveFolder = '..\..\..\data\raw';
+saveFolder = 'C:\Users\diogo\OneDrive - Universidade de Lisboa\Terraprima\Code\DEB Constraint Prediction\deb-birth-prediction\data\raw';
 
 %% Get list of species
 
@@ -42,22 +42,22 @@ predictionsTable = table( ...
     );
 
 %% Settings
-noiseLevel = 0.35; 
+seed = 42;
+noiseLevel = 0.25; 
 kapNoiseLevel = 10;
 saveResultsTableEvery = 200;
 
 % Max execution time per species
-maxTime = 1; % in minutes
+maxTime = 0.25; % in minutes
 maxTime = maxTime * 60; % convert to seconds
 
-printProgress = false;
+printProgress = true;
 
 % Output file
 snl = strrep(sprintf('%.3f', noiseLevel), '.', 'p');  
 sknl = strrep(sprintf('%.1f', kapNoiseLevel), '.', 'p');  
 
-noiseLevelString = sprintf('%s_%s_', snl, sknl);
-outputFileName = [saveFolder '\deb_reach_birth_noise_' '.csv'];
+outputFileName = [saveFolder '\' sprintf('deb_reach_birth_noise_%s_kapnoise_%s_seed_%d.csv', snl, sknl, seed)];
 
 
 %% Set up parallel pool
@@ -66,6 +66,7 @@ if isempty(pool)
     pool = parpool('Processes');
 end
 numWorkers = pool.NumWorkers;
+parfevalOnAll(@rng, 0, seed);
 
 % Initialize variables
 i = 1; % Index of species to submit
@@ -84,7 +85,14 @@ while i <= numPoints || ~isempty(inProgressFutures)
         predictionsTable{i, 'point_id'} = speciesPoint;
         % Generate random parameters
         try
-            [par, cPar] = generateParameters(speciesName, allSpeciesFolder, noiseLevel, kapNoiseLevel);
+            [par, cPar, success] = generateParameters(speciesName, allSpeciesFolder, noiseLevel, kapNoiseLevel);
+            if ~success
+                predictionsTable{i, 'success'} = false;
+                predictionsTable{i, 'error_type'} = "par_gen_failed";
+                predictionsTable{i, 'error_message'} = "Could not generate parameters to meet trivial birth constraint.";
+                i = i + 1;
+                continue
+            end
             % Store parameters 
             for p=1:length(parameterCols)
                 parName = parameterCols{p};
@@ -194,7 +202,7 @@ writetable(predictionsTable, outputFileName,'WriteRowNames',true);
 fprintf('Table saved in %s\n', outputFileName);
 
 %% Function to process each species
-function [par, cPar] = generateParameters(speciesName, allSpeciesFolder, noiseLevel, kapNoiseLevel)
+function [par, cPar, success] = generateParameters(speciesName, allSpeciesFolder, noiseLevel, kapNoiseLevel)
 speciesFolder = fullfile(allSpeciesFolder, speciesName);
 
 % Check if the species folder exists
@@ -215,24 +223,35 @@ if isfolder(speciesFolder)
     if strcmp(metaPar.model, {'stx', 'stf'})
         return
     end
-    % Add variation to parameters
-    par.z = addMultiplicativeNoise(par.z, noiseLevel);
-    par.v = addMultiplicativeNoise(par.v, noiseLevel);
-    par.E_G = addMultiplicativeNoise(par.E_G, noiseLevel);
-    par.p_M = addMultiplicativeNoise(par.p_M, noiseLevel);
-    par.E_Hb = addMultiplicativeNoise(par.E_Hb, noiseLevel);
-    par.k_J = addMultiplicativeNoise(par.k_J, noiseLevel);
-    % Add variation to kap
-    par.kap = betarnd(par.kap*kapNoiseLevel, (1-par.kap)*kapNoiseLevel);
-    % Add variation to f
-    if rand() > 0.5
-        par.f = 1;
-    else
-        par.f = 0.5  + 0.5*rand();
+    kvHb = 2;
+    nTries = 0; 
+    while kvHb > 1 && nTries < 100
+        % Add variation to parameters
+        par.z = addMultiplicativeNoise(par.z, noiseLevel);
+        par.v = addMultiplicativeNoise(par.v, noiseLevel);
+        par.E_G = addMultiplicativeNoise(par.E_G, noiseLevel);
+        par.p_M = addMultiplicativeNoise(par.p_M, noiseLevel);
+        par.E_Hb = addMultiplicativeNoise(par.E_Hb, noiseLevel);
+        par.k_J = addMultiplicativeNoise(par.k_J, noiseLevel);
+        % Add variation to kap
+        par.kap = betarnd(par.kap*kapNoiseLevel, (1-par.kap)*kapNoiseLevel);
+        % Compute compound parameters
+        cPar = parscomp_st(par);
+        kvHb = cPar.k * cPar.v_Hb;
+        nTries = nTries + 1;
     end
-    
-    % Compute compound parameters
-    cPar = parscomp_st(par);
+    if kvHb > 1
+        par = struct(); cPar = struct(); success = false;
+        return
+    end
+    % Generate random f such that it meets the trivial condition k*v_Hb<f^3
+    % if rand() > 0.5
+    %     par.f = 1;
+    % else
+        f3 = kvHb + (1 - kvHb) * rand();
+        par.f = f3^(1/3);
+    % end
+    success = true;
 else
     error('Folder for species "%s" does not exist.', speciesName);
 end
