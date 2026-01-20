@@ -14,7 +14,7 @@ Column names:
 - `p_Am`: The maximum specific assimilation rate $\{\dot{p}_{Am}\} = z [\dot{p}_M] / \kappa$ (J/d.cm²)
 - `g`: The energy investment ratio $g = [E_G] / (\kappa [E_m])$ (-)
 - `k`: The maintenance ratio $k = \dot{k}_J / \dot{k}_M$ (-)
-- `v_Hb`: The scaled maturity at birth $v_H^b = E_H^b \dot{k}_M / (p_Am L_m^3)$ (-)
+- `v_Hb`: The scaled maturity at birth $v_H^b = E_H^b \dot{k}_M / ( \{\dot{p}_{Am}\} L_m^3)$ (-)
 - `lb`: The scaled length at birth $l_b = L_b / z$ (-).
 - `tb`: The age at birth $t_b$ (d). It is the age at birth divided by $\dot{k}_M$.
 - `lb<f`: Whether the scaled length at birth is less than the functional response (True/False). It is True if $l_b < f$.
