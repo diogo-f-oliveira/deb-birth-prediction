@@ -24,7 +24,7 @@ class TrainDEBBirthNetConfig:
 
     # Model architecture
     net_config: DEBBirthNetConfig = None
-    scaling_type: str = "standardize"  # none | standard
+    scaling_type: str = "standardize"  # none | standardize | log_standardize
 
     # Imbalance handling
     use_pos_weight: bool = False

@@ -42,8 +42,7 @@ def load_data_pytorch(config: TrainDEBBirthNetConfig):
     features, targets = get_features_targets(data=data, data_spec=config.data_spec)
     scaled_input_data, scalers = scale_data_pytorch(features, scaling_type=config.scaling_type)
     # Extract output and convert to tensors
-    targets_tensor = {split: convert_to_tensor(df) for split, df in targets.items()}
-
+    targets_tensor = {split: convert_to_tensor(df.astype(float)) for split, df in targets.items()}
 
     datasets = {}
     dataloaders = {}
@@ -60,7 +59,7 @@ def load_data_pytorch(config: TrainDEBBirthNetConfig):
             shuffle=True if split == 'train' else False,
         )
 
-    return scaled_input_data, targets, dataloaders, datasets, scalers
+    return scaled_input_data, targets_tensor, dataloaders, datasets, scalers
 
 
 

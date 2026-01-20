@@ -142,13 +142,145 @@ class TorchStandardScaler(nn.Module):
 
 
 
+# New: log then standardize scaler
+class TorchLogStandardScaler(nn.Module):
+    """
+    Scaler that applies a log transform (log(x)) followed by standardization.
+
+    - Uses log (not log1p) because inputs are positive by default.
+    - Mirrors TorchStandardScaler API: fit, partial_fit, transform, inverse_transform, forward, fitted_.
+    - All statistics (mean_, var_, scale_, n_samples_seen_) are registered as buffers.
+    """
+    def __init__(self, with_mean: bool = True, with_std: bool = True, eps: float = 1e-8):
+        super().__init__()
+        self.with_mean = with_mean
+        self.with_std = with_std
+        self.eps = float(eps)
+
+        self.register_buffer("mean_", torch.tensor([]))
+        self.register_buffer("var_", torch.tensor([]))
+        self.register_buffer("scale_", torch.tensor([]))
+        self.register_buffer("n_samples_seen_", torch.tensor(0, dtype=torch.long))
+
+    def _to_tensor(self, X):
+        return convert_to_tensor(X).float()
+
+    def _log_transform(self, X: torch.Tensor) -> torch.Tensor:
+        # use natural log; inputs are expected to be positive
+        return torch.log(X)
+
+    def _inv_log_transform(self, X: torch.Tensor) -> torch.Tensor:
+        # inverse of log is exp
+        return torch.exp(X)
+
+    def fit(self, X, sample_dim: int = 0):
+        X = self._to_tensor(X)
+        if X.numel() == 0:
+            raise ValueError("Empty array passed to fit()")
+
+        device = self.mean_.device if self.mean_.numel() else X.device
+        X = X.to(device)
+
+        X_log = self._log_transform(X)
+
+        mean = X_log.mean(dim=sample_dim)
+        var = X_log.var(dim=sample_dim, unbiased=False)
+
+        if not self.with_mean:
+            mean = torch.zeros_like(mean)
+        if not self.with_std:
+            var = torch.ones_like(var)
+
+        scale = torch.sqrt(var + self.eps)
+        scale = torch.where(scale == 0, torch.ones_like(scale), scale)
+
+        self.mean_ = mean.detach()
+        self.var_ = var.detach()
+        self.scale_ = scale.detach()
+        n = X.shape[sample_dim]
+        self.n_samples_seen_ = torch.tensor(int(n), dtype=torch.long, device=device)
+        return self
+
+    def partial_fit(self, X, sample_dim: int = 0):
+        X = self._to_tensor(X)
+        if X.numel() == 0:
+            return self
+
+        device = self.mean_.device if self.mean_.numel() else X.device
+        X = X.to(device)
+
+        n_new = X.shape[sample_dim]
+        X_log = self._log_transform(X)
+        mean_new = X_log.mean(dim=sample_dim)
+        var_new = X_log.var(dim=sample_dim, unbiased=False)
+
+        if not self.with_mean:
+            mean_new = torch.zeros_like(mean_new)
+        if not self.with_std:
+            var_new = torch.ones_like(var_new)
+
+        if self.n_samples_seen_.numel() == 0 or int(self.n_samples_seen_) == 0:
+            self.mean_ = mean_new.detach()
+            self.var_ = var_new.detach()
+            self.scale_ = torch.sqrt(self.var_ + self.eps)
+            self.scale_ = torch.where(self.scale_ == 0, torch.ones_like(self.scale_), self.scale_)
+            self.n_samples_seen_ = torch.tensor(int(n_new), dtype=torch.long, device=device)
+            return self
+
+        n_old = int(self.n_samples_seen_)
+        mean_old = self.mean_.to(device)
+        var_old = self.var_.to(device)
+
+        n_total = n_old + n_new
+        mean_total = (mean_old * n_old + mean_new * n_new) / n_total
+
+        delta_old = mean_old - mean_total
+        delta_new = mean_new - mean_total
+        var_total = (n_old * var_old + n_new * var_new + n_old * (delta_old ** 2) + n_new * (delta_new ** 2)) / n_total
+
+        self.mean_ = mean_total.detach()
+        self.var_ = var_total.detach()
+        self.scale_ = torch.sqrt(self.var_ + self.eps)
+        self.scale_ = torch.where(self.scale_ == 0, torch.ones_like(self.scale_), self.scale_)
+        self.n_samples_seen_ = torch.tensor(int(n_total), dtype=torch.long, device=device)
+        return self
+
+    def transform(self, X):
+        if self.n_samples_seen_.numel() == 0 or int(self.n_samples_seen_) == 0:
+            raise RuntimeError("TorchLogStandardScaler not fitted yet. Call fit or partial_fit first.")
+
+        X = self._to_tensor(X)
+        device = self.mean_.device
+        X = X.to(device)
+
+        X_log = self._log_transform(X)
+        return (X_log - self.mean_) / self.scale_
+
+    def inverse_transform(self, X):
+        if self.n_samples_seen_.numel() == 0 or int(self.n_samples_seen_) == 0:
+            raise RuntimeError("TorchLogStandardScaler not fitted yet. Call fit or partial_fit first.")
+        X = self._to_tensor(X)
+        device = self.mean_.device
+        X = X.to(device)
+        X_unscaled = X * self.scale_ + self.mean_
+        return self._inv_log_transform(X_unscaled)
+
+    def forward(self, X):
+        return self.transform(X)
+
+    @property
+    def fitted_(self) -> bool:
+        return bool(self.n_samples_seen_.numel() and int(self.n_samples_seen_) > 0)
+
+
 def scale_data_pytorch(data, scaling_type: str, device=None):
     """
     Scale data using Scaler classes.
 
     Arguments:
       - data: mapping (e.g. dict) of splits -> arrays/tensors, must include a 'train' key
-      - scaling_type: 'standardize' to use TorchStandardScaler, 'none' or None to skip scaling
+      - scaling_type: 'standardize' to use TorchStandardScaler, 'log_standardize' for log+standardize,
+                      'none' or None to skip scaling
       - device: Optional device (str or torch.device). If provided, the scaler will be fitted on this device
         and all transformed outputs will be moved to this device. If None, device is inferred from the data/scaler.
 
@@ -174,8 +306,10 @@ def scale_data_pytorch(data, scaling_type: str, device=None):
     # create scaler based on requested type
     if scaling_type == 'standardize':
         scaler = TorchStandardScaler()
+    elif scaling_type == 'log_standardize':
+        scaler = TorchLogStandardScaler()
     else:
-        raise ValueError(f"Unknown scaling_type '{scaling_type}'. Supported: 'standardize', 'none'.")
+        raise ValueError(f"Unknown scaling_type '{scaling_type}'. Supported: 'standardize', 'log_standardize', 'none'.")
 
     # prepare train split tensor and move to device (if provided) so scaler buffers are created on that device
     train_split = data["train"]

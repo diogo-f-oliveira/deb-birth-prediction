@@ -182,7 +182,7 @@ if __name__ == "__main__":
         feature_set="dimensionless"
     )
     net_config = DEBBirthNetConfig(
-        hidden_dims=[64, 32, 16],
+        hidden_dims=[32, 32, 32],
         dropout=0.2,
         input_dim=data_spec.n_features,
     )
@@ -196,7 +196,8 @@ if __name__ == "__main__":
         lr=1e-4,
         weight_decay=1e-3,
         net_config=net_config,
-        scaling_type="standardize",
+        # scaling_type="standardize",
+        scaling_type='log_standardize',
         use_pos_weight=True,
         seed=42,
         num_workers=4,
@@ -212,11 +213,4 @@ if __name__ == "__main__":
         ),
         device=resolve_device(cfg.device)
     )
-    print(
-        f"test_loss={test_loss:.4f} "
-        f"val_f1={test_metrics.f1:.3f} val_auroc={test_metrics.auroc:.3f} val_ap={test_metrics.avg_precision:.3f}"
-    )
-    # Print confusion matrix
-    print(f"Confusion Matrix:\nTP: {test_metrics.tp}, FP: {test_metrics.fp}\nFN: {test_metrics.fn}, TN: {test_metrics.tn}")
-
-    print('Done')
+    print(test_metrics)
