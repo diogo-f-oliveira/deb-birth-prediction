@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import List
+from pathlib import Path
 
-from src.debbirth.data.schema import DatasetSpec
-from src.debbirth.models.nn.structure import DEBBirthNetConfig
+from ...data.schema import DatasetSpec
 
 
 @dataclass
 class TrainDEBBirthNetConfig:
     # Output
-    outdir: str
+    outdir: Path
 
     # Data
     data_spec: DatasetSpec
@@ -34,3 +35,23 @@ class TrainDEBBirthNetConfig:
     seed: int = 42
     num_workers: int = 0
     device: str = "auto"  # auto | cpu | cuda
+
+    def __post_init__(self):
+        # Coerce outdir to a Path (accept strings or Paths)
+        if not isinstance(self.outdir, Path):
+            object.__setattr__(self, "outdir", Path(self.outdir))
+
+
+@dataclass(frozen=True)
+class DEBBirthNetConfig:
+    input_dim: int
+    hidden_dims: List[int] = None
+    dropout: float = 0.1
+    threshold: float = 0.5  # new hyperparameter: decision threshold for predict
+
+    def __post_init__(self):
+        if self.hidden_dims is None:
+            object.__setattr__(self, "hidden_dims", [64, 32])
+        # validate threshold is in (0,1)
+        if not (0.0 < self.threshold < 1.0):
+            raise ValueError(f"threshold must be between 0 and 1 (exclusive), got {self.threshold}")

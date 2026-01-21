@@ -10,22 +10,17 @@ from datetime import datetime
 import numpy as np
 import torch
 
-from ...models.nn.config import TrainDEBBirthNetConfig
-from ...utils.pytorch import set_seed, resolve_device
-from ...utils.metrics import compute_pos_weight
+from .structure import DEBBirthNet
+from .config import DEBBirthNetConfig, TrainDEBBirthNetConfig
 from ...data.schema import DatasetSpec
 from ...data.load import load_data_pytorch
-from .structure import DEBBirthNetConfig, DEBBirthNet
+from ...evaluate.metrics import compute_pos_weight
 from ...evaluate.predict import evaluate_pytorch_binary_classifier
-
+from ...utils.results import ensure_outdir
+from ...utils.pytorch import set_seed, resolve_device
 
 
 # Helpers
-def ensure_outdir(outdir: str) -> Path:
-    p = Path(outdir)
-    p.mkdir(parents=True, exist_ok=True)
-    return p
-
 
 def maybe_ray_report(metrics: Dict[str, Any]) -> None:
     """Report to Ray Tune if available; otherwise do nothing."""
@@ -64,16 +59,19 @@ def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
     # e.g. "2026-01-20T14-30-05"
     timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     model_type = DEBBirthNet.__name__
-    base = Path(cfg.outdir) if cfg.outdir else Path.cwd()
+    base = cfg.outdir if cfg.outdir else Path.cwd()  # cfg.outdir is now a Path
     generated_outdir = base / "results" / "runs" / f"{timestamp}_{model_type}"
-    cfg.outdir = str(generated_outdir)
+    # store Path in config
+    cfg.outdir = generated_outdir
 
     outdir = ensure_outdir(cfg.outdir)
-    (outdir / "config.json").write_text(json.dumps(asdict(cfg), indent=2))
+    # convert Path to str for JSON serialization
+    cfg_dict = asdict(cfg)
+    cfg_dict["outdir"] = str(cfg.outdir)
+    (outdir / "config.json").write_text(json.dumps(cfg_dict, indent=2))
 
     set_seed(cfg.seed)
     device = resolve_device(cfg.device)
-
 
     scaled_input_data, targets, dataloaders, datasets, scalers = load_data_pytorch(cfg)
 
@@ -93,7 +91,6 @@ def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
         loss_fn = torch.nn.BCEWithLogitsLoss()
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
-
 
     history: List[Dict[str, Any]] = []
 
@@ -133,7 +130,6 @@ def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
         history.append(row)
         # maybe_ray_report(row)
 
-
         print(
             f"[{epoch:03d}/{cfg.epochs}] "
             f"train_loss={train_loss:.4f} val_loss={val_loss:.4f} "
@@ -152,6 +148,7 @@ def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
         "datasets": datasets,
         "scalers": scalers,
     }
+
 
 # -----------------------------
 # Ray Tune entrypoint
@@ -186,9 +183,9 @@ if __name__ == "__main__":
         dropout=0.2,
         input_dim=data_spec.n_features,
     )
-
+    out_dir = ensure_outdir("")
     cfg = TrainDEBBirthNetConfig(
-        outdir="",
+        outdir=out_dir,
         data_spec=data_spec,
         data_dir="data/processed/",
         epochs=50,
@@ -196,7 +193,6 @@ if __name__ == "__main__":
         lr=1e-4,
         weight_decay=1e-3,
         net_config=net_config,
-        # scaling_type="standardize",
         scaling_type='log_standardize',
         use_pos_weight=True,
         seed=42,

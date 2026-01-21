@@ -1,25 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import List
 
 import torch
 import torch.nn as nn
 
-
-@dataclass(frozen=True)
-class DEBBirthNetConfig:
-    input_dim: int
-    hidden_dims: List[int] = None
-    dropout: float = 0.1
-    threshold: float = 0.5  # new hyperparameter: decision threshold for predict
-
-    def __post_init__(self):
-        if self.hidden_dims is None:
-            object.__setattr__(self, "hidden_dims", [64, 32])
-        # validate threshold is in (0,1)
-        if not (0.0 < self.threshold < 1.0):
-            raise ValueError(f"threshold must be between 0 and 1 (exclusive), got {self.threshold}")
+from .config import DEBBirthNetConfig
 
 
 class DEBBirthNet(nn.Module):
