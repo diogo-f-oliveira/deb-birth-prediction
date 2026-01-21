@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from .metrics import convert_to_numpy
+from .numpy import convert_to_numpy
 
 
 def set_seed(seed: int) -> None:
