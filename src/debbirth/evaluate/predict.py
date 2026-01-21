@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Tuple, Callable, Optional
 
 import numpy as np
@@ -12,49 +11,20 @@ from sklearn.metrics import (
     confusion_matrix,
     f1_score,
     precision_score,
+    precision_recall_fscore_support,
     recall_score,
     roc_auc_score,
 )
 
-from ..utils.metrics import extract_pos_proba, convert_to_numpy
+from ..utils.numpy import convert_to_numpy
+from .metrics import extract_pos_proba, BinaryMetrics
 from ..utils.pytorch import collect_xy_from_dataloader
 
 
-@dataclass(frozen=True)
-class BinaryMetrics:
-    accuracy: float
-    precision: float
-    recall: float
-    f1: float
-    auroc: float
-    avg_precision: float
-    tp: int
-    fp: int
-    tn: int
-    fn: int
-
-    @classmethod
-    def empty(cls) -> BinaryMetrics:
-        return cls(
-            accuracy=float("nan"),
-            precision=float("nan"),
-            recall=float("nan"),
-            f1=float("nan"),
-            auroc=float("nan"),
-            avg_precision=float("nan"),
-            tp=0,
-            fp=0,
-            tn=0,
-            fn=0,
-        )
-
-    def confusion_matrix(self) -> np.ndarray:
-        """Return confusion matrix in sklearn convention:
-        [[tn, fp],
-         [fn, tp]]
-        """
-        return np.array([[self.tn, self.fp], [self.fn, self.tp]], dtype=int)
-
+def _safe_pair_mean(a: float, b: float) -> float:
+    if not np.isfinite(a) or not np.isfinite(b):
+        return float("nan")
+    return float((a + b) / 2.0)
 
 
 def evaluate_binary_classifier(
@@ -75,7 +45,7 @@ def evaluate_binary_classifier(
         pos_label: positive label used by sklearn.
 
     Returns:
-        BinaryMetrics
+        BinaryMetrics (contains per-class and macro metrics)
     """
     # If possible, check early for empty dataset without forcing conversion
     try:
@@ -102,36 +72,78 @@ def evaluate_binary_classifier(
     if y_true.size == 0:
         return BinaryMetrics.empty()
 
-
     # Core classification metrics
     acc = float(accuracy_score(y_true, y_pred))
-    prec = float(precision_score(y_true, y_pred, pos_label=pos_label, zero_division=0))
-    rec = float(recall_score(y_true, y_pred, pos_label=pos_label, zero_division=0))
-    f1 = float(f1_score(y_true, y_pred, pos_label=pos_label, zero_division=0))
+
+    # Per-class precision/recall/f1 (order: negative(0), positive(1))
+    prec_arr, rec_arr, f1_arr, _ = precision_recall_fscore_support(
+        y_true, y_pred, labels=[0, 1], zero_division=0
+    )
+    precision_neg, precision_pos = float(prec_arr[0]), float(prec_arr[1])
+    recall_neg, recall_pos = float(rec_arr[0]), float(rec_arr[1])
+    f1_neg, f1_pos = float(f1_arr[0]), float(f1_arr[1])
+
+    # Keep legacy names as positive-class aliases
+    precision_pos_alias = precision_pos
+    recall_pos_alias = recall_pos
+    f1_pos_alias = f1_pos
+
+    # Macro averaged classification metrics (use sklearn helpers / fallback)
+    prec_macro = float(precision_score(y_true, y_pred, average="macro", zero_division=0))
+    rec_macro = float(recall_score(y_true, y_pred, average="macro", zero_division=0))
+    f1_macro = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
 
     # Confusion matrix with fixed label order (0,1)
     cm = confusion_matrix(y_true, y_pred, labels=[0, 1])
     # cm = [[tn, fp], [fn, tp]]
     tn, fp, fn, tp = (int(cm[0, 0]), int(cm[0, 1]), int(cm[1, 0]), int(cm[1, 1]))
 
-    # Ranking metrics (may be undefined if only one class present)
+    # Ranking metrics for positive and negative class
     try:
-        auroc = float(roc_auc_score(y_true, y_prob))
-    except ValueError:
-        auroc = float("nan")
+        auroc_pos = float(roc_auc_score(y_true, y_prob))
+    except Exception:
+        auroc_pos = float("nan")
 
     try:
-        ap = float(average_precision_score(y_true, y_prob))
-    except ValueError:
-        ap = float("nan")
+        ap_pos = float(average_precision_score(y_true, y_prob))
+    except Exception:
+        ap_pos = float("nan")
+
+    # For negative class, invert labels and probabilities
+    try:
+        y_true_neg = (y_true == 0).astype(int)
+        y_prob_neg = 1.0 - y_prob
+        auroc_neg = float(roc_auc_score(y_true_neg, y_prob_neg))
+    except Exception:
+        auroc_neg = float("nan")
+
+    try:
+        ap_neg = float(average_precision_score(y_true_neg, y_prob_neg))
+    except Exception:
+        ap_neg = float("nan")
+
+    # Macro averaged ranking metrics : mean of pos and neg (NaN if either is NaN)
+    auroc_macro = _safe_pair_mean(auroc_pos, auroc_neg)
+    ap_macro = _safe_pair_mean(ap_pos, ap_neg)
 
     return BinaryMetrics(
         accuracy=acc,
-        precision=prec,
-        recall=rec,
-        f1=f1,
-        auroc=auroc,
-        avg_precision=ap,
+        precision=precision_pos_alias,
+        recall=recall_pos_alias,
+        f1=f1_pos_alias,
+        precision_pos=precision_pos,
+        recall_pos=recall_pos,
+        f1_pos=f1_pos,
+        precision_neg=precision_neg,
+        recall_neg=recall_neg,
+        f1_neg=f1_neg,
+        precision_macro=prec_macro,
+        recall_macro=rec_macro,
+        f1_macro=f1_macro,
+        auroc=auroc_pos,
+        avg_precision=ap_pos,
+        auroc_macro=auroc_macro,
+        avg_precision_macro=ap_macro,
         tp=tp,
         fp=fp,
         tn=tn,
