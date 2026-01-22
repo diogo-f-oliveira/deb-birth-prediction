@@ -3,8 +3,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union, Mapping
 
-from ...data.schema import DatasetSpec
+from .functions import DEFAULT_FUNCTIONS
 from .constants import GPConstant, DEFAULT_CONSTANTS
+from ...data.schema import DatasetSpec
+from ...utils.results import create_run_outdir
 
 
 @dataclass(frozen=True)
@@ -17,7 +19,7 @@ class GPConfig:
     tournament_size: int = 50
 
     # Primitives
-    function_set: Tuple[Any, ...] = ("add", "sub", "mul", "div")
+    function_set: Tuple[Any, ...] = DEFAULT_FUNCTIONS
 
     # Discrete constants: implemented as constant-valued feature columns.
     constants: Tuple[GPConstant, ...] = DEFAULT_CONSTANTS
@@ -40,6 +42,7 @@ class GPConfig:
     p_point_mutation: float = 0.01
     p_point_replace: float = 0.05
 
+
 ClassWeight = Union[None, str, Mapping[int, float], Mapping[bool, float]]
 
 
@@ -55,7 +58,10 @@ class TrainGPConfig:
     data_dir: str = "data/processed"
 
     # Runtime / experiment settings
-    outdir: Path = Path(".")
+    outdir: Optional[Path] = None
+    # optional run name / model identifier used when auto-creating the run directory
+    run_name: Optional[str] = None
+
     low_memory: bool = False
     verbose: int = 0
 
@@ -65,6 +71,12 @@ class TrainGPConfig:
     num_workers: int = 1
 
     def __post_init__(self):
-        # Coerce outdir to a Path (accept strings or Paths)
-        if not isinstance(self.outdir, Path):
-            object.__setattr__(self, "outdir", Path(self.outdir))
+        # Coerce outdir to a Path (accept strings or Paths) or create one if None
+        if self.outdir is None:
+            # build a timestamped run directory using run_name or fallback to 'gp'
+            model_name = self.run_name if self.run_name else "DEBBirthSymbolicClassifier"
+            run_dir = create_run_outdir(model_name, base=Path.cwd())
+            object.__setattr__(self, "outdir", run_dir)
+        else:
+            if not isinstance(self.outdir, Path):
+                object.__setattr__(self, "outdir", Path(self.outdir))
