@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Tuple
 
+import numpy as np
 import pandas as pd
 from torch.utils.data import TensorDataset, DataLoader
 
 from .schema import DatasetSpec
 from .scalers import scale_data_pytorch
 from ..models.nn.config import TrainDEBBirthNetConfig
+from ..models.gp.config import TrainGPConfig
 from ..utils.pytorch import convert_to_tensor
 
 def load_splits(dataset_dir: str, split_type='train_val_test') -> Dict[str, pd.DataFrame]:
@@ -37,7 +39,7 @@ def get_features_targets(data: Dict[str, pd.DataFrame], data_spec: DatasetSpec):
 
 def load_data_pytorch(config: TrainDEBBirthNetConfig):
     # Load dataframes
-    data = load_splits(dataset_dir=config.data_dir, split_type='train_val_test')
+    data = load_splits(dataset_dir=config.data_dir, split_type=config.data_splits)
     # Extract input features and scale
     features, targets = get_features_targets(data=data, data_spec=config.data_spec)
     scaled_input_data, scalers = scale_data_pytorch(features, scaling_type=config.scaling_type)
@@ -61,5 +63,29 @@ def load_data_pytorch(config: TrainDEBBirthNetConfig):
 
     return scaled_input_data, targets_tensor, dataloaders, datasets, scalers
 
+def load_data_gp(cfg: TrainGPConfig) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
+    """Load splits and return features and targets as numpy arrays for GP training.
 
+    The function accepts a TrainGPConfig and extracts:
+      - dataset directory from cfg.dataset_spec.data_dir if present,
+        otherwise falls back to cfg.output_dir or current directory.
+      - uses default split type 'train_val_test'.
 
+    Returns:
+      features_np: dict[split] -> np.ndarray (float)
+      targets_np:  dict[split] -> np.ndarray (int)
+    """
+    # Try to obtain dataset directory from the DatasetSpec, then cfg.output_dir, then cwd
+    dataset_dir = cfg.data_dir
+
+    data = load_splits(dataset_dir=dataset_dir, split_type="train_val_test")
+    features, targets = get_features_targets(data=data, data_spec=cfg.data_spec)
+
+    features_np: Dict[str, np.ndarray] = {split: df.values.astype(float) for split, df in features.items()}
+
+    targets_np: Dict[str, np.ndarray] = {}
+    for split, t in targets.items():
+        arr = t.values if hasattr(t, "values") else np.asarray(t)
+        targets_np[split] = arr.astype(int).ravel()
+
+    return features_np, targets_np
