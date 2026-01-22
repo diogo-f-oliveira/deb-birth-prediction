@@ -11,12 +11,11 @@ import numpy as np
 import torch
 
 from .structure import DEBBirthNet
-from .config import DEBBirthNetConfig, TrainDEBBirthNetConfig
-from ...data.schema import DatasetSpec
+from .config import TrainDEBBirthNetConfig
 from ...data.load import load_data_pytorch
 from ...evaluate.metrics import compute_pos_weight
 from ...evaluate.predict import evaluate_pytorch_binary_classifier
-from ...utils.results import ensure_outdir
+from ...utils.results import ensure_outdir, create_run_outdir  # added create_run_outdir
 from ...utils.pytorch import set_seed, resolve_device
 
 
@@ -54,13 +53,9 @@ def save_checkpoint(path: Path, model: torch.nn.Module, train_cfg: TrainDEBBirth
 
 def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
     # Generate an outdir for this run inside "<base>/results/runs/<timestamp>_<model_type>"
-    # base is cfg.outdir if provided, otherwise cwd. Timestamp is start of training.
-    # Use an ISO-like timestamp but safe for filenames (no colons).
-    # e.g. "2026-01-20T14-30-05"
-    timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     model_type = DEBBirthNet.__name__
-    base = cfg.outdir if cfg.outdir else Path.cwd()  # cfg.outdir is now a Path
-    generated_outdir = base / "results" / "runs" / f"{timestamp}_{model_type}"
+    base = cfg.outdir if cfg.outdir else Path.cwd()
+    generated_outdir = create_run_outdir(model_type, base=base)
     # store Path in config
     cfg.outdir = generated_outdir
 
@@ -174,7 +169,10 @@ def trainable(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # Local run example (edit paths)
+    # Run example
+    from ...data.schema import DatasetSpec
+    from .config import DEBBirthNetConfig
+
     data_spec = DatasetSpec(
         feature_set="dimensionless"
     )
@@ -209,4 +207,5 @@ if __name__ == "__main__":
         ),
         device=resolve_device(cfg.device)
     )
+    print("\nTest metrics:")
     print(test_metrics)
