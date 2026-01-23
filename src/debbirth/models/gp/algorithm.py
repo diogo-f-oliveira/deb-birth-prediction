@@ -27,8 +27,8 @@ class DEBBirthSymbolicClassifier(SymbolicClassifier):
             constants: Sequence[GPConstant] = (),
             # --- gplearn.genetic.SymbolicClassifier args (0.4.3) ---
             population_size: int = 1000,
-            generations: int = 20,
-            tournament_size: int = 20,
+            generations: int = 50,
+            tournament_size: int = 50,
             const_range: Optional[Tuple[float, float]] = None,
             init_depth: Tuple[int, int] = (2, 6),
             init_method: str = "half and half",
