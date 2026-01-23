@@ -13,12 +13,15 @@ from ...evaluate.predict import evaluate_binary_classifier
 from ...evaluate.metrics import BinaryMetrics
 
 
-def train_gp_classifier(cfg: TrainGPConfig) -> Dict[str, float]:
-    """Train a GP classifier and evaluate it on the validation split."""
+def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, Any]:
+    """Train a GP classifier and evaluate it on the validation split.
 
+    Args:
+        cfg: TrainGPConfig
+        save_run: if True, create the run directory and persist artifacts (default True).
+                  if False, no directory is created and nothing is saved.
+    """
     np.random.seed(cfg.seed)
-
-    cfg.outdir.mkdir(parents=True, exist_ok=True)
 
     features, targets = load_data_gp(cfg)
 
@@ -33,7 +36,9 @@ def train_gp_classifier(cfg: TrainGPConfig) -> Dict[str, float]:
 
     val_metrics = evaluate_binary_classifier(model, X_val, y_val)
 
-    save_gp_run(model=model, cfg=cfg, val_metrics=val_metrics)
+    # Only save artifacts when requested
+    if save_run:
+        save_gp_run(model=model, cfg=cfg, val_metrics=val_metrics)
 
     return {
         "model": model,
@@ -47,14 +52,13 @@ def train_gp_classifier(cfg: TrainGPConfig) -> Dict[str, float]:
 
 def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_metrics: BinaryMetrics) -> None:
     """Persist model + config + validation metrics + run details."""
+    cfg.outdir.mkdir(parents=True, exist_ok=True)
 
+    # Save train config
+    cfg.save_json(cfg.outdir / "train_gp_config.json")
 
-    with (cfg.outdir / "train_gp_config.json").open("w", encoding="utf-8") as f:
-        json.dump(asdict(cfg), f, indent=2, sort_keys=True, default=str)
-
-    (cfg.outdir / "metrics").mkdir(exist_ok=True)
-    with (cfg.outdir / "metrics" / "val_metrics.json").open("w", encoding="utf-8") as f:
-        json.dump(asdict(val_metrics), f, indent=2, sort_keys=True)
+    # Save validation metrics
+    val_metrics.save_json(cfg.outdir / "metrics" / "val_metrics.json")
 
     (cfg.outdir / "model").mkdir(exist_ok=True)
 
