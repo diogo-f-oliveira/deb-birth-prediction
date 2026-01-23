@@ -185,3 +185,5 @@ cython_debug/
 
 # Model runs
 results/runs/
+# Hyperparameter optimization results
+results/tune/

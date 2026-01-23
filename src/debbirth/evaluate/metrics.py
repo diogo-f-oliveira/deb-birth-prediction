@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+from pathlib import Path
+import json
 
 import numpy as np
 import torch
@@ -121,3 +123,11 @@ class BinaryMetrics:
             f"avg_precision (macro): {self.avg_precision_macro:.4f}\n"
             f"tp: {int(self.tp)}  fp: {int(self.fp)}  tn: {int(self.tn)}  fn: {int(self.fn)}"
         )
+
+    def save_json(self, path) -> None:
+        """Save this BinaryMetrics to a JSON file (creates parent dirs)."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("w", encoding="utf-8") as f:
+            json.dump(asdict(self), f, indent=2, sort_keys=True)
+
