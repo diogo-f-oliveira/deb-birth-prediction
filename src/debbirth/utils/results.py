@@ -11,7 +11,7 @@ def ensure_outdir(outdir: str) -> Path:
     return p
 
 
-def create_run_outdir(model_name: str, base: Union[str, Path] = ".") -> Path:
+def create_run_outdir(model_name: str, base: Union[str, Path] = "results/runs") -> Path:
     """Create and return a run directory named "<timestamp>_<model_name>" under "<base>/results/runs".
 
     - timestamp is generated from now and formatted as "%Y-%m-%dT%H-%M-%S" (safe for filenames).
@@ -20,5 +20,5 @@ def create_run_outdir(model_name: str, base: Union[str, Path] = ".") -> Path:
     """
     base_path = Path(base) if base else Path.cwd()
     timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    run_dir = base_path / "results" / "runs" / f"{timestamp}_{model_name}"
+    run_dir = base_path /  f"{timestamp}_{model_name}"
     return ensure_outdir(run_dir)
