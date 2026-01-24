@@ -17,20 +17,17 @@ numPointsPerSpecies = 20;
 numPoints = numSpecies * numPointsPerSpecies;
 
 %% Initialize table
-parameterCols = {'z', 'v', 'kap', 'E_G', 'p_M', 'E_Hb', 'k_J', 'f'};
-compoundParameterCols = {'E_m', 'k_M', 'p_Am', 'g', 'k', 'v_Hb'};
+parameterCols = {'g', 'k', 'v_Hb', 'f'};
 columnNames = {
     'generator_species', 'point_id',  ...                          % info
-     parameterCols{:}, ...   % parameters
-     compoundParameterCols{:}, ...          % compound parameters
+     parameterCols{:}, ...                      % parameters
     'lb', 'tb', 'lb<f', 'k*vHb<c', 'reached_birth', ...        % outputs
     'success', 'execution_time', 'error_type', 'error_message', ... % logs
     };
 numCols = length(columnNames);
 varTypes = {
     'string', 'int32', ...
-    'double', 'double', 'double', 'double', 'double', 'double', 'double', 'double', ...
-    'double', 'double', 'double', 'double', 'double', 'double', ...
+    'double', 'double', 'double', 'double', ...
     'double', 'double', 'logical', 'logical', 'logical', ...
     'logical', 'double', 'string', 'string', ...
     };
@@ -43,8 +40,7 @@ predictionsTable = table( ...
 
 %% Settings
 seed = 42;
-noiseLevel = 0.25; 
-kapNoiseLevel = 10;
+noiseLevel = 0.75; 
 saveResultsTableEvery = 200;
 
 % Max execution time per species
@@ -55,9 +51,8 @@ printProgress = true;
 
 % Output file
 snl = strrep(sprintf('%.3f', noiseLevel), '.', 'p');  
-sknl = strrep(sprintf('%.1f', kapNoiseLevel), '.', 'p');  
 
-outputFileName = [saveFolder '\' sprintf('deb_reach_birth_noise_%s_kapnoise_%s_seed_%d.csv', snl, sknl, seed)];
+outputFileName = [saveFolder '\' sprintf('AmP_comp_pars_noise_%s_seed_%d.csv', snl, seed)];
 
 
 %% Set up parallel pool
@@ -85,7 +80,7 @@ while i <= numPoints || ~isempty(inProgressFutures)
         predictionsTable{i, 'point_id'} = speciesPoint;
         % Generate random parameters
         try
-            [par, cPar, success] = generateParameters(speciesName, allSpeciesFolder, noiseLevel, kapNoiseLevel);
+            [genPar, success] = generateParameters(speciesName, allSpeciesFolder, noiseLevel);
             if ~success
                 predictionsTable{i, 'success'} = false;
                 predictionsTable{i, 'error_type'} = "par_gen_failed";
@@ -93,19 +88,14 @@ while i <= numPoints || ~isempty(inProgressFutures)
                 i = i + 1;
                 continue
             end
-            % Store parameters 
+            % Store parameters
             for p=1:length(parameterCols)
                 parName = parameterCols{p};
-                predictionsTable{i, parName} = par.(parName);
-            end
-            % Store compound parameters
-            for c=1:length(compoundParameterCols)
-                cParName = compoundParameterCols{c};
-                predictionsTable{i, cParName} = cPar.(cParName);
+                predictionsTable{i, parName} = genPar.(parName);
             end
 
             % Submit parfeval task
-            fut = parfeval(pool, @runBirthSimulation, 2, par, cPar);
+            fut = parfeval(pool, @runBirthSimulation, 2, genPar);
             % Record the future, species name, start time
             startTime = tic;
             nFutures = length(inProgressFutures);
@@ -202,9 +192,9 @@ writetable(predictionsTable, outputFileName,'WriteRowNames',true);
 fprintf('Table saved in %s\n', outputFileName);
 
 %% Function to process each species
-function [par, cPar, success] = generateParameters(speciesName, allSpeciesFolder, noiseLevel, kapNoiseLevel)
+function [genPar, success] = generateParameters(speciesName, allSpeciesFolder, noiseLevel)
 speciesFolder = fullfile(allSpeciesFolder, speciesName);
-
+genPar = struct();
 % Check if the species folder exists
 if isfolder(speciesFolder)
     % Change directory to the species folder
@@ -219,6 +209,8 @@ if isfolder(speciesFolder)
     else
         [par, metaPar, ~] = feval(['pars_init_' speciesName], metaData);
     end
+    cPar = parscomp_st(par);
+
     % Check that DEB model has an egg stage
     if strcmp(metaPar.model, {'stx', 'stf'})
         return
@@ -227,21 +219,15 @@ if isfolder(speciesFolder)
     nTries = 0; 
     while kvHb > 1 && nTries < 100
         % Add variation to parameters
-        par.z = addMultiplicativeNoise(par.z, noiseLevel);
-        par.v = addMultiplicativeNoise(par.v, noiseLevel);
-        par.E_G = addMultiplicativeNoise(par.E_G, noiseLevel);
-        par.p_M = addMultiplicativeNoise(par.p_M, noiseLevel);
-        par.E_Hb = addMultiplicativeNoise(par.E_Hb, noiseLevel);
-        par.k_J = addMultiplicativeNoise(par.k_J, noiseLevel);
-        % Add variation to kap
-        par.kap = betarnd(par.kap*kapNoiseLevel, (1-par.kap)*kapNoiseLevel);
+        genPar.k = addMultiplicativeNoise(cPar.k, noiseLevel);
+        genPar.v_Hb = addMultiplicativeNoise(cPar.v_Hb, noiseLevel);
+        genPar.g = addMultiplicativeNoise(cPar.g, noiseLevel);
         % Compute compound parameters
-        cPar = parscomp_st(par);
-        kvHb = cPar.k * cPar.v_Hb;
+        kvHb = genPar.k * genPar.v_Hb;
         nTries = nTries + 1;
     end
     if kvHb > 1
-        par = struct(); cPar = struct(); success = false;
+        genPar = struct(); success = false;
         return
     end
     % Generate random f such that it meets the trivial condition k*v_Hb<f^3
@@ -249,7 +235,7 @@ if isfolder(speciesFolder)
     %     par.f = 1;
     % else
         f3 = kvHb + (1 - kvHb) * rand();
-        par.f = f3^(1/3);
+        genPar.f = f3^(1/3);
     % end
     success = true;
 else
@@ -258,7 +244,7 @@ end
 end
 
 
-function [outputs, success] = runBirthSimulation(par, cPar)
+function [outputs, success] = runBirthSimulation(genPar)
 outputs = struct( ...
     'lb', NaN, ...
     'tb', NaN, ...
@@ -269,7 +255,7 @@ outputs = struct( ...
 success = false;
 
 % Get compound parameters for computing length at birth
-g = cPar.g; k = cPar.k; v_Hb = cPar.v_Hb; f = par.f;
+g = genPar.g; k = genPar.k; v_Hb = genPar.v_Hb; f = genPar.f;
 pars_lb = [g, k, v_Hb];
 
 % Compute length at birth
