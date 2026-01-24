@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import Any, Optional, Tuple, Union, Mapping
 import json
 
-from .functions import DEFAULT_FUNCTIONS
-from .constants import GPConstant, DEFAULT_CONSTANTS
+from .functions import DEFAULT_FUNCTION_SET
+from .constants import GPConstant, DEFAULT_CONSTANT_SET
 from ...data.schema import DatasetSpec
 from ...utils.results import create_run_outdir
 
@@ -20,10 +20,10 @@ class GPConfig:
     tournament_size: int = 50
 
     # Primitives
-    function_set: Tuple[Any, ...] = DEFAULT_FUNCTIONS
+    function_set: Tuple[Any, ...] = DEFAULT_FUNCTION_SET
 
     # Discrete constants: implemented as constant-valued feature columns.
-    constants: Tuple[GPConstant, ...] = DEFAULT_CONSTANTS
+    constants: Tuple[GPConstant, ...] = DEFAULT_CONSTANT_SET
 
     # Initialization
     init_depth: Tuple[int, int] = (2, 6)

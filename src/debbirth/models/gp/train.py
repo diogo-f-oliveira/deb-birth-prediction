@@ -115,7 +115,7 @@ if __name__ == "__main__":
         # tournament_size=20,
         p_crossover=0.8,
         parsimony_coefficient=0.001,
-        function_set=DEFAULT_FUNCTIONS + (ATAN,),
+        function_set=DEFAULT_FUNCTION_SET + (ATAN,),
     )
     cfg = TrainGPConfig(
         gp=gp_cfg,

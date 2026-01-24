@@ -38,7 +38,7 @@ def _dirichlet3_from_uniforms(u1, u2, a1=1, a2=1, a3=1, eps=1e-12):
 
 
 def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state: int = 42,
-                    report_metrics: bool = False, verbose: int = 0, num_workers=1) -> Optional[Dict[str, Any]]:
+                    report_metrics: bool = False, verbose: int = 0, num_workers=1, **gp_config_params) -> Optional[Dict[str, Any]]:
     """Evaluate a given hyperparameter configuration for genetic programming symbolic classifier."""
 
     population_size = config.get("pop_size")
@@ -104,7 +104,7 @@ def hyperopt_calibration(search_space: Dict[str, Any],
                          run_name=None, tune_dir=None, max_concurrent_trials=None,
                          evaluate_on_test=False, save_best_model=False,
                          random_state: int = 42,
-                         **evaluate_config_options):
+                         gp_config_parms: Optional[Dict[str, Any]] = None):
     if run_name is None:
         time_str = dt.now().strftime('%Y-%m-%d_%H-%M-%S')
         run_name = f"GPSC__{time_str}"
@@ -116,7 +116,7 @@ def hyperopt_calibration(search_space: Dict[str, Any],
                         report_metrics=True,
                         verbose=0,
                         random_state=random_state,
-                        **evaluate_config_options)
+                        **gp_config_parms)
     alg = HyperOptSearch(metric=metric, mode=mode, points_to_evaluate=current_best_params,
                          random_state_seed=random_state)
 
@@ -201,16 +201,16 @@ if __name__ == '__main__':
 
     # Hyperparameter optimization
     search_space = {
-        "pop_size": tune.qrandint(50, 1000, 50),
-        "n_gen": tune.qrandint(5, 100, 5),
+        "pop_size": tune.qrandint(50, 500, 25),
+        "n_gen": tune.qrandint(5, 60, 5),
         "tourn_frac": tune.quniform(0.05, 0.5, 0.01),
-        "parsi_coef": tune.qloguniform(1e-5, 1e-1, 1e-5),
+        "parsi_coef": tune.qloguniform(1e-4, 1e-1, 1e-4),
         "p_reprod": tune.quniform(0.0, 0.4, 0.01),
         "p_mut_total": tune.quniform(0.0, 0.4, 0.01),
         "u1_subtree": tune.uniform(0.0, 1.0),
         "u2_hoist": tune.uniform(0.0, 1.0),
     }
-
+    from .functions import DEFAULT_FUNCTION_SET, EXTENDED_FUNCTION_SET
     best_output = hyperopt_calibration(
         search_space=search_space,
         data_spec=data_spec,
@@ -223,6 +223,9 @@ if __name__ == '__main__':
         evaluate_on_test=True,
         save_best_model=True,
         random_state=seed,
+        gp_config_parms={
+            'function_set': EXTENDED_FUNCTION_SET,
+        }
     )
 
     print("\nBest program:")

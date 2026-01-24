@@ -38,4 +38,6 @@ def _atan(x: np.ndarray) -> np.ndarray:
 ATAN = make_function(function=_atan, name="atan", arity=1, wrap=True)
 
 
-DEFAULT_FUNCTIONS = ("add", "sub", "mul", "div", "sqrt", "log", "inv", "neg")
+DEFAULT_FUNCTION_SET = ("add", "sub", "mul", "div", "sqrt", "log", "inv", "neg")
+
+EXTENDED_FUNCTION_SET = DEFAULT_FUNCTION_SET + (CBRT, SQUARE, ATAN)

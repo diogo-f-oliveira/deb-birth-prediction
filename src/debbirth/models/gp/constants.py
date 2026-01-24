@@ -13,7 +13,7 @@ class GPConstant:
     value: float
 
 
-DEFAULT_CONSTANTS: Tuple[GPConstant, ...] = (
+DEFAULT_CONSTANT_SET: Tuple[GPConstant, ...] = (
     GPConstant(name="c1", value=1.0),
     GPConstant(name="c2", value=2.0),
     GPConstant(name="c3", value=3.0),
