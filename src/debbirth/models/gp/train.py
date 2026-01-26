@@ -138,7 +138,7 @@ if __name__ == "__main__":
         verbose=1,
         class_weights="balanced",
         seed=42,
-        num_workers=-1,
+        num_workers=10,
     )
     print(cfg)
     print()
