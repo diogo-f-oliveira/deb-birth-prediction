@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import List
-from pathlib import Path
+import json
+from dataclasses import dataclass, asdict
+from typing import List, Optional
 
+from pathlib import Path
 from ...data.schema import DatasetSpec
+from ...utils.results import create_run_outdir  # new import
 
 
 @dataclass
 class TrainDEBBirthNetConfig:
-    # Output
-    outdir: Path
-
     # Data
     data_spec: DatasetSpec
     data_splits: str = "train_val_test"  # train_val_test | train_test
@@ -36,10 +35,19 @@ class TrainDEBBirthNetConfig:
     num_workers: int = 0
     device: str = "auto"  # auto | cpu | cuda
 
+    # Output
+    outdir: Optional[Path] = None
+
     def __post_init__(self):
-        # Coerce outdir to a Path (accept strings or Paths)
-        if not isinstance(self.outdir, Path):
-            object.__setattr__(self, "outdir", Path(self.outdir))
+        # If outdir was not provided, create a timestamped run dir (safe filename) under cwd.
+        if self.outdir is None:
+            model_name = "DEBBirthNet"
+            run_dir = create_run_outdir(model_name, base=Path.cwd())
+            object.__setattr__(self, "outdir", run_dir)
+        else:
+            # Coerce outdir to a Path (accept strings or Paths)
+            if not isinstance(self.outdir, Path):
+                object.__setattr__(self, "outdir", Path(self.outdir))
 
 
 @dataclass(frozen=True)
@@ -55,3 +63,10 @@ class DEBBirthNetConfig:
         # validate threshold is in (0,1)
         if not (0.0 < self.threshold < 1.0):
             raise ValueError(f"threshold must be between 0 and 1 (exclusive), got {self.threshold}")
+
+    def save_json(self, path) -> None:
+        """Save this TrainGPConfig to a JSON file (creates parent dirs)."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("w", encoding="utf-8") as f:
+            json.dump(asdict(self), f, indent=2, sort_keys=True, default=str)

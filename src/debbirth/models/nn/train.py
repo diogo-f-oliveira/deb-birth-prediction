@@ -15,7 +15,7 @@ from .config import TrainDEBBirthNetConfig
 from ...data.load import load_data_pytorch
 from ...evaluate.metrics import compute_pos_weight
 from ...evaluate.predict import evaluate_pytorch_binary_classifier
-from ...utils.results import ensure_outdir, create_run_outdir  # added create_run_outdir
+from ...utils.results import ensure_outdir
 from ...utils.pytorch import set_seed, resolve_device
 
 
@@ -52,18 +52,6 @@ def save_checkpoint(path: Path, model: torch.nn.Module, train_cfg: TrainDEBBirth
 # -----------------------------
 
 def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
-    # Generate an outdir for this run inside "<base>/results/runs/<timestamp>_<model_type>"
-    model_type = DEBBirthNet.__name__
-    base = cfg.outdir if cfg.outdir else Path.cwd()
-    generated_outdir = create_run_outdir(model_type, base=base)
-    # store Path in config
-    cfg.outdir = generated_outdir
-
-    outdir = ensure_outdir(cfg.outdir)
-    # convert Path to str for JSON serialization
-    cfg_dict = asdict(cfg)
-    cfg_dict["outdir"] = str(cfg.outdir)
-    (outdir / "config.json").write_text(json.dumps(cfg_dict, indent=2))
 
     set_seed(cfg.seed)
     device = resolve_device(cfg.device)
@@ -131,7 +119,7 @@ def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
             f"val_f1={val_metrics.f1:.3f} val_auroc={val_metrics.auroc:.3f} val_ap={val_metrics.avg_precision:.3f}"
         )
 
-    (outdir / "history.json").write_text(json.dumps(history, indent=2))
+    (cfg.outdir / "history.json").write_text(json.dumps(history, indent=2))
 
     # Pack and return
     return {
@@ -181,9 +169,7 @@ if __name__ == "__main__":
         dropout=0.2,
         input_dim=data_spec.n_features,
     )
-    out_dir = ensure_outdir("")
     cfg = TrainDEBBirthNetConfig(
-        outdir=out_dir,
         data_spec=data_spec,
         data_dir="data/processed/",
         epochs=50,
