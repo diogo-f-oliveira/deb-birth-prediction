@@ -1,3 +1,5 @@
+from typing import Callable, Tuple, Union, Any
+
 import numpy as np
 from gplearn.functions import make_function
 
@@ -38,6 +40,14 @@ def _atan(x: np.ndarray) -> np.ndarray:
 ATAN = make_function(function=_atan, name="atan", arity=1, wrap=True)
 
 
-DEFAULT_FUNCTION_SET = ("add", "sub", "mul", "div", "sqrt", "log", "inv", "neg")
+# Type aliases
+GPFunction = Union[str, Callable[..., Any]]
+GPFunctionSet = Tuple[GPFunction, ...]
 
-EXTENDED_FUNCTION_SET = DEFAULT_FUNCTION_SET + (CBRT, SQUARE, ATAN)
+# Predefined function sets
+
+ARITHMETIC_FUNCTION_SET: GPFunctionSet = ("add", "sub", "mul", "div")
+
+DEFAULT_FUNCTION_SET: GPFunctionSet = ("add", "sub", "mul", "div", "sqrt", "log", "inv", "neg")
+
+EXTENDED_FUNCTION_SET: GPFunctionSet = DEFAULT_FUNCTION_SET + (CBRT, SQUARE, ATAN)
