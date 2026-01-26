@@ -5,8 +5,9 @@ from typing import Any, Dict, Optional, Tuple, Union, Sequence
 import numpy as np
 from gplearn.genetic import SymbolicClassifier
 
-from .config import TrainGPConfig, ClassWeight
-from .constants import GPConstant
+from .config import TrainGPConfig
+from .functions import GPFunctionSet
+from .constants import GPConstantSet
 
 
 class DEBBirthSymbolicClassifier(SymbolicClassifier):
@@ -24,7 +25,7 @@ class DEBBirthSymbolicClassifier(SymbolicClassifier):
             *,
             # --- our additions ---
             base_feature_names: Optional[Sequence[str]] = None,
-            constants: Sequence[GPConstant] = (),
+            constants: GPConstantSet = (),
             # --- gplearn.genetic.SymbolicClassifier args (0.4.3) ---
             population_size: int = 1000,
             generations: int = 50,
@@ -32,7 +33,7 @@ class DEBBirthSymbolicClassifier(SymbolicClassifier):
             const_range: Optional[Tuple[float, float]] = None,
             init_depth: Tuple[int, int] = (2, 6),
             init_method: str = "half and half",
-            function_set: Sequence[Any] = ("add", "sub", "mul", "div"),
+            function_set: GPFunctionSet = ("add", "sub", "mul", "div"),
             transformer: str = "sigmoid",
             metric: str = "log loss",
             parsimony_coefficient: Union[float, str] = 0.001,
@@ -59,7 +60,7 @@ class DEBBirthSymbolicClassifier(SymbolicClassifier):
         self.base_feature_names: Optional[Tuple[str, ...]] = (
             tuple(base_feature_names) if base_feature_names is not None else None
         )
-        self.constants: Tuple[GPConstant, ...] = tuple(constants)
+        self.constants: GPConstantSet = tuple(constants)
 
         base = self.base_feature_names or ()
         const_names = tuple(c.name for c in self.constants)
@@ -111,9 +112,6 @@ class DEBBirthSymbolicClassifier(SymbolicClassifier):
 
     def fit(self, X: Any, y: Any, sample_weight: Any = None):  # type: ignore[override]
         return super().fit(self._augment_X(X), y, sample_weight=sample_weight)
-
-    # def predict(self, X: Any):  # type: ignore[override]
-    #     return super().predict(self._augment_X(X))
 
     def predict_proba(self, X: Any):  # type: ignore[override]
         return super().predict_proba(self._augment_X(X))
