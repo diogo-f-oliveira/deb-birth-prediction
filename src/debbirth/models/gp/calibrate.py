@@ -7,19 +7,20 @@ from functools import partial
 from datetime import datetime as dt
 
 import numpy as np
+from ray.tune.search import ConcurrencyLimiter
 from scipy.stats import beta
 from ray.tune import CLIReporter
-from ray.tune.schedulers import ASHAScheduler
 from ray.tune.search.hyperopt import HyperOptSearch
 from ray import tune, train
 
 os.environ['RAY_AIR_NEW_OUTPUT'] = '0'
 
 from ...data.schema import DatasetSpec
-from ...evaluate.metrics import BinaryMetrics
 from .config import GPConfig, TrainGPConfig
 from .train import train_gp_classifier, save_gp_run
 from ...evaluate.predict import evaluate_binary_classifier
+from .functions import DEFAULT_FUNCTION_SET, EXTENDED_FUNCTION_SET, ARITHMETIC_FUNCTION_SET
+from .constants import DEFAULT_CONSTANT_SET, EXTENDED_CONSTANT_SET, NO_CONSTANT_SET
 
 
 def _dirichlet3_from_uniforms(u1, u2, a1=1, a2=1, a3=1, eps=1e-12):
@@ -38,7 +39,8 @@ def _dirichlet3_from_uniforms(u1, u2, a1=1, a2=1, a3=1, eps=1e-12):
 
 
 def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state: int = 42,
-                    report_metrics: bool = False, verbose: int = 0, num_workers=1, **gp_config_params) -> Optional[Dict[str, Any]]:
+                    report_metrics: bool = False, verbose: int = 0, num_workers=1, **gp_config_params) -> Optional[
+    Dict[str, Any]]:
     """Evaluate a given hyperparameter configuration for genetic programming symbolic classifier."""
 
     population_size = config.get("pop_size")
@@ -46,8 +48,8 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
     tournament_fraction = config.get("tourn_frac")
     tournament_size = max(2, int(population_size * tournament_fraction))
     parsimony_coefficient = config.get("parsi_coef")
-    # Genetic operation probabilities
 
+    # Genetic operation probabilities
     p_reprod = config.get("p_reprod")
     p_mut_total = config.get("p_mut_total")
     p_crossover = 1 - p_reprod - p_mut_total
@@ -60,12 +62,34 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
     p_point_mutation *= p_mut_total
     p_subtree_mutation *= p_mut_total
 
+    # Get function set
+    func_set_option = config.get("function_set", "default")
+    if func_set_option == "arithmetic":
+        function_set = ARITHMETIC_FUNCTION_SET
+    elif func_set_option == "default":
+        function_set = DEFAULT_FUNCTION_SET
+    elif func_set_option == "extended":
+        function_set = EXTENDED_FUNCTION_SET
+    else:
+        raise ValueError(f"Unknown function_set option: {func_set_option}")
+    # Get constants set
+    const_set_option = config.get("constants_set", "default")
+    if const_set_option == "default":
+        const_set = DEFAULT_CONSTANT_SET
+    elif const_set_option == "none":
+        const_set = NO_CONSTANT_SET
+    elif const_set_option == "extended":
+        const_set = EXTENDED_CONSTANT_SET
+    else:
+        raise ValueError(f"Unknown constants_set option: {const_set_option}")
     # Build GPConfig and TrainGPConfig
     gp_cfg = GPConfig(
         population_size=population_size,
         generations=generations,
         tournament_size=tournament_size,
         parsimony_coefficient=parsimony_coefficient,
+        function_set=function_set,
+        constants=const_set,
         p_crossover=p_crossover,
         p_subtree_mutation=p_subtree_mutation,
         p_hoist_mutation=p_hoist_mutation,
@@ -76,7 +100,6 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
         gp=gp_cfg,
         data_spec=data_spec,
         outdir=None,
-        # Force verbose to 0 so models themselves are quiet; Tune will report progress.
         verbose=verbose,
         class_weights=config.get("class_weights", None),
         seed=random_state,
@@ -104,7 +127,9 @@ def hyperopt_calibration(search_space: Dict[str, Any],
                          run_name=None, tune_dir=None, max_concurrent_trials=None,
                          evaluate_on_test=False, save_best_model=False,
                          random_state: int = 42,
-                         gp_config_parms: Optional[Dict[str, Any]] = None):
+                         gp_config_params=None):
+    if gp_config_params is None:
+        gp_config_params = dict()
     if run_name is None:
         time_str = dt.now().strftime('%Y-%m-%d_%H-%M-%S')
         run_name = f"GPSC__{time_str}"
@@ -116,9 +141,12 @@ def hyperopt_calibration(search_space: Dict[str, Any],
                         report_metrics=True,
                         verbose=0,
                         random_state=random_state,
-                        **gp_config_parms)
+                        **gp_config_params)
+
     alg = HyperOptSearch(metric=metric, mode=mode, points_to_evaluate=current_best_params,
                          random_state_seed=random_state)
+    if max_concurrent_trials is not None:
+        alg = ConcurrencyLimiter(alg, max_concurrent=max_concurrent_trials)
 
     tuner = tune.Tuner(
         trainable,
@@ -151,7 +179,6 @@ def hyperopt_calibration(search_space: Dict[str, Any],
 
     best_model_train_output = evaluate_config(config=best_result.config, data_spec=data_spec, random_state=random_state,
                                               report_metrics=False, verbose=True, num_workers=-1)
-
 
     if save_best_model:
         save_gp_run(
@@ -201,31 +228,29 @@ if __name__ == '__main__':
 
     # Hyperparameter optimization
     search_space = {
-        "pop_size": tune.qrandint(50, 500, 25),
-        "n_gen": tune.qrandint(5, 60, 5),
+        "pop_size": 1000,
+        "n_gen": 50,
         "tourn_frac": tune.quniform(0.05, 0.5, 0.01),
-        "parsi_coef": tune.qloguniform(1e-4, 1e-1, 1e-4),
+        "parsi_coef": tune.qloguniform(1e-5, 1e-2, 1e-5),
         "p_reprod": tune.quniform(0.0, 0.4, 0.01),
         "p_mut_total": tune.quniform(0.0, 0.4, 0.01),
         "u1_subtree": tune.uniform(0.0, 1.0),
         "u2_hoist": tune.uniform(0.0, 1.0),
+        "func_set": "extended",
+        "const_set": "extended",
     }
-    from .functions import DEFAULT_FUNCTION_SET, EXTENDED_FUNCTION_SET
     best_output = hyperopt_calibration(
         search_space=search_space,
         data_spec=data_spec,
-        num_samples=10,
+        num_samples=20,
         metric='f1_macro',
         mode='max',
         # run_name='GPSC_Hyperopt_Test',
         # tune_dir='results/tune',
-        # max_concurrent_trials=2,
+        max_concurrent_trials=2,
         evaluate_on_test=True,
         save_best_model=True,
         random_state=seed,
-        gp_config_parms={
-            'function_set': EXTENDED_FUNCTION_SET,
-        }
     )
 
     print("\nBest program:")

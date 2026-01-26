@@ -1,8 +1,7 @@
 import csv
-import json
-from dataclasses import asdict
+import random
 from pathlib import Path
-from typing import Any, Callable, Dict, Tuple, Mapping
+from typing import Any, Dict
 import numpy as np
 from joblib import dump as joblib_dump
 
@@ -11,6 +10,7 @@ from .algorithm import DEBBirthSymbolicClassifier, create_gp_classifier
 from .config import TrainGPConfig
 from ...evaluate.predict import evaluate_binary_classifier
 from ...evaluate.metrics import BinaryMetrics
+# from .symbolic import model_program_to_sympy_strings
 
 
 def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, Any]:
@@ -21,7 +21,9 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, 
         save_run: if True, create the run directory and persist artifacts (default True).
                   if False, no directory is created and nothing is saved.
     """
+    # Set random seeds
     np.random.seed(cfg.seed)
+    random.seed(cfg.seed)
 
     features, targets = load_data_gp(cfg)
 
@@ -69,6 +71,16 @@ def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_me
     if program_str is not None:
         (cfg.outdir / "model" / "best_program.txt").write_text(program_str + "", encoding="utf-8")
 
+        # # Convert model program to sympy simplified string + srepr and save
+        # try:
+        #     res = model_program_to_sympy_strings(model)
+        #     if res is not None:
+        #         (cfg.outdir / "model" / "best_program_sympy.txt").write_text(res["simplified"] + "", encoding="utf-8")
+        #         (cfg.outdir / "model" / "best_program_sympy.srepr").write_text(res["srepr"] + "", encoding="utf-8")
+        # except Exception:
+        #     # don't fail run saving if sympy conversion fails; just continue
+        #     pass
+
     joblib_dump(model, cfg.outdir / "model" / "gp_model.joblib")
 
     if hasattr(model, "run_details_"):
@@ -104,18 +116,20 @@ if __name__ == "__main__":
     from ...data.schema import DatasetSpec
     from .config import GPConfig
     from .functions import *
-    from ...utils.results import ensure_outdir
+    from .constants import *
 
     data_spec = DatasetSpec(
         feature_set="dimensionless"
     )
-    gp_cfg = GPConfig(
-        # generations=50,
-        # population_size=1000,
-        # tournament_size=20,
+    gp_cfg: GPConfig = GPConfig(
+        generations=50,
+        population_size=1000,
+        tournament_size=50,
         p_crossover=0.8,
         parsimony_coefficient=0.001,
-        function_set=DEFAULT_FUNCTION_SET + (ATAN,),
+        function_set=EXTENDED_FUNCTION_SET,
+        constants=EXTENDED_CONSTANT_SET,
+        init_depth=(6, 10),
     )
     cfg = TrainGPConfig(
         gp=gp_cfg,
@@ -132,8 +146,10 @@ if __name__ == "__main__":
     output = train_gp_classifier(cfg)
     print("\nBest program:")
     print(output["best_program"])
+    print("\nValidation metrics:")
+    print(output["val_metrics"])
 
-    test_metrics = evaluate_binary_classifier(model=output["model"], X=output['features']['test'],
-                                              y=output['targets']['test'])
-    print("\nTest metrics:")
-    print(test_metrics)
+    # test_metrics = evaluate_binary_classifier(model=output["model"], X=output['features']['test'],
+    #                                           y=output['targets']['test'])
+    # print("\nTest metrics:")
+    # print(test_metrics)
