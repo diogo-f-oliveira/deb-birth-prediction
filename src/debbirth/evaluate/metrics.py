@@ -8,6 +8,27 @@ from typing import Optional, Any, Dict
 import numpy as np
 import torch
 
+METRIC_LABELS = {
+    "accuracy": "Accuracy",
+    "precision_pos": "Precision",
+    "recall_pos": "Recall",
+    "f1_pos": "F1-score",
+    "precision_neg": "Precision",
+    "recall_neg": "Recall",
+    "f1_neg": "F1-score",
+    "precision_macro": "Precision",
+    "recall_macro": "Recall",
+    "f1_macro": "F1",
+    "auroc": "AUROC",
+    "avg_precision": "AP",
+    "auroc_macro": "AUROC",
+    "avg_precision_macro": "AP",
+    "tp": "TP",
+    "fp": "FP",
+    "tn": "TN",
+    "fn": "FN",
+}
+
 
 def extract_pos_proba(proba: np.ndarray) -> np.ndarray:
     """Return positive-class probability as shape [N].
