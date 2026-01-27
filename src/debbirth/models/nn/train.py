@@ -10,7 +10,7 @@ import numpy as np
 import torch
 
 from .structure import DEBBirthNet
-from .config import TrainDEBBirthNetConfig
+from .config import TrainDEBBirthNetConfig, DEBBirthNetConfig
 from ...data.load import load_data_pytorch
 from ...data.scalers import save_scaler, TorchStandardScaler, load_scaler
 from ...evaluate.metrics import compute_pos_weight, EpochBinaryMetrics
@@ -75,17 +75,16 @@ def load_trained_nn(outdir: Any, device: Any = None) -> Dict[str, Any]:
       dict with keys:
         - "model": instantiated DEBBirthNet with loaded state_dict
         - "scaler": loaded scaler instance or None
-        - "train_cfg": raw dict loaded from train config JSON (if present) or None
-        - "net_cfg": raw dict used to construct DEBBirthNet
-        - "model_state_path": Path to the loaded state file
+        - "train_cfg": TrainDEBBirthNetConfig instance or None
+        - "net_cfg": DEBBirthNetConfig instance used to construct DEBBirthNet
     """
 
     outdir = Path(outdir)
     model_dir = outdir / "model"
 
-    # Load config
+    # Load config (use the dataclass loader)
     cfg_path = outdir / "train_nn_config.json"
-    train_cfg_dict = json.loads(cfg_path.read_text(encoding="utf-8"))
+    train_cfg = TrainDEBBirthNetConfig.load_json(cfg_path)
 
     # Candidate model state files (state_dict or checkpoint)
     state_path = model_dir / "model_state_dict.pth"
@@ -104,29 +103,21 @@ def load_trained_nn(outdir: Any, device: Any = None) -> Dict[str, Any]:
         # assume it's a raw state_dict
         state_dict = loaded
 
-    # Extract net_config to instantiate DEBBirthNet
-    net_cfg_dict = None
-    if train_cfg_dict:
-        # nested key commonly 'net_config'
-        net_cfg_dict = train_cfg_dict.get("net_config")
-
-    # Ensure numeric lists (hidden_dims) are in proper form; let DEBBirthNetConfig validate
-    net_cfg = DEBBirthNetConfig(**net_cfg_dict)
-
     # Instantiate and load state dict
-    model = DEBBirthNet(net_cfg)
+    model = DEBBirthNet(train_cfg.net_config)
     model.load_state_dict(state_dict)
     model = model.to(map_device)
 
     # Attempt to load scaler
     scaler_path = model_dir / "scaler.pth"
-    scaler = load_scaler(scaler_path, map_location=map_device)
+    scaler = None
+    if scaler_path.exists():
+        scaler = load_scaler(scaler_path, map_location=map_device)
 
     return {
         "model": model,
         "scaler": scaler,
-        "train_cfg": train_cfg_dict,
-        "net_cfg": net_cfg_dict,
+        "train_cfg": train_cfg,
     }
 
 
@@ -241,6 +232,8 @@ if __name__ == "__main__":
     print(output["val_metrics"])
 
     loaded_output = load_trained_nn(outdir=cfg.outdir, device=cfg.device)
+
+    print(loaded_output['scaler'].fitted_, loaded_output['scaler'].mean_, loaded_output['scaler'].var_)
 
     test_metrics, test_loss = evaluate_pytorch_binary_classifier(
         model=loaded_output["model"],
