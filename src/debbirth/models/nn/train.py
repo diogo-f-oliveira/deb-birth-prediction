@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
+import csv
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List
-from datetime import datetime
 
 import numpy as np
 import torch
@@ -13,50 +12,131 @@ import torch
 from .structure import DEBBirthNet
 from .config import TrainDEBBirthNetConfig
 from ...data.load import load_data_pytorch
-from ...evaluate.metrics import compute_pos_weight
+from ...data.scalers import save_scaler, TorchStandardScaler, load_scaler
+from ...evaluate.metrics import compute_pos_weight, EpochBinaryMetrics
 from ...evaluate.predict import evaluate_pytorch_binary_classifier
-from ...utils.results import ensure_outdir
 from ...utils.pytorch import set_seed, resolve_device
 
 
-# Helpers
+def save_run_results(cfg: TrainDEBBirthNetConfig, history: List[EpochBinaryMetrics], model: torch.nn.Module,
+                     scaler: TorchStandardScaler) -> None:
+    outdir = Path(cfg.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
 
-def maybe_ray_report(metrics: Dict[str, Any]) -> None:
-    """Report to Ray Tune if available; otherwise do nothing."""
-    try:
-        from ray.air import session  # type: ignore
-        session.report(metrics)
-        return
-    except Exception:
-        pass
+    # Save training history in .csv
+    hist_csv_path = outdir / "history.csv"
+    rows = [asdict(h) for h in history]
+    if rows:
+        # Use the keys of the first row as header (consistent across EpochBinaryMetrics)
+        fieldnames = list(rows[0].keys())
+        with hist_csv_path.open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            writer.writeheader()
+            for r in rows:
+                writer.writerow(r)
+    else:
+        # create empty file if no history
+        hist_csv_path.write_text("")
 
-    try:
-        from ray import tune  # type: ignore
-        tune.report(**metrics)
-        return
-    except Exception:
-        pass
+    # Create metrics/ subdir
+    metrics_dir = outdir / "metrics"
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+
+    # Save val_metrics.json (last entry from history)
+    metrics_path = metrics_dir / "val_metrics.json"
+    last = history[-1]
+    metrics_path.write_text(json.dumps(asdict(last), indent=2, sort_keys=True))
+
+    # Save model_state_dict and scaler so they can later be loaded
+    model_dir = outdir / "model"
+    model_dir.mkdir(parents=True, exist_ok=True)
+
+    # also save raw state_dict for convenience
+    torch.save(model.state_dict(), model_dir / "model_state_dict.pth")
+
+    # save config as JSON
+    cfg.save_json(cfg.outdir / "train_nn_config.json")
+
+    # save scaler using scaler-native saver
+    scaler_path = model_dir / "scaler.pth"
+    save_scaler(scaler, scaler_path)
 
 
-def save_checkpoint(path: Path, model: torch.nn.Module, train_cfg: TrainDEBBirthNetConfig, scaler: Any) -> None:
-    payload = {
-        "model_state_dict": model.state_dict(),
-        "train_cfg": asdict(train_cfg),
-        "scaler": scaler,  # can be None, or a state_dict, or anything serializable
+# New helper: load a saved run (model + scaler + config) from an outdir produced by save_run_results.
+def load_run_results(outdir: Any, device: Any = None) -> Dict[str, Any]:
+    """
+    Load model, scaler and config from a saved run directory.
+
+    Args:
+      outdir: path to run output dir (string or Path). Expects a 'model/' subdir and a JSON config.
+      device: target device for the returned model (string or torch.device). If None, uses cpu.
+
+    Returns:
+      dict with keys:
+        - "model": instantiated DEBBirthNet with loaded state_dict
+        - "scaler": loaded scaler instance or None
+        - "train_cfg": raw dict loaded from train config JSON (if present) or None
+        - "net_cfg": raw dict used to construct DEBBirthNet
+        - "model_state_path": Path to the loaded state file
+    """
+
+    outdir = Path(outdir)
+    model_dir = outdir / "model"
+
+    # Load config
+    cfg_path = outdir / "train_nn_config.json"
+    train_cfg_dict = json.loads(cfg_path.read_text(encoding="utf-8"))
+
+    # Candidate model state files (state_dict or checkpoint)
+    state_path = model_dir / "model_state_dict.pth"
+
+    # Determine device / map_location
+    if device is None:
+        map_device = torch.device("cpu")
+    else:
+        map_device = resolve_device(device) if isinstance(device, (str, Path)) else device
+
+    # Load the state file (could be a dict containing 'model_state_dict' or a raw state_dict)
+    loaded = torch.load(state_path, map_location=map_device, weights_only=True)
+    if isinstance(loaded, dict) and "model_state_dict" in loaded:
+        state_dict = loaded["model_state_dict"]
+    else:
+        # assume it's a raw state_dict
+        state_dict = loaded
+
+    # Extract net_config to instantiate DEBBirthNet
+    net_cfg_dict = None
+    if train_cfg_dict:
+        # nested key commonly 'net_config'
+        net_cfg_dict = train_cfg_dict.get("net_config")
+
+    # Ensure numeric lists (hidden_dims) are in proper form; let DEBBirthNetConfig validate
+    net_cfg = DEBBirthNetConfig(**net_cfg_dict)
+
+    # Instantiate and load state dict
+    model = DEBBirthNet(net_cfg)
+    model.load_state_dict(state_dict)
+    model = model.to(map_device)
+
+    # Attempt to load scaler
+    scaler = None
+    scaler_path = model_dir / "scaler.pth"
+    scaler = load_scaler(scaler_path, map_location=map_device)
+
+    return {
+        "model": model,
+        "scaler": scaler,
+        "train_cfg": train_cfg_dict,
+        "net_cfg": net_cfg_dict,
+        "model_state_path": state_path,
     }
-    torch.save(payload, path)
 
 
-# -----------------------------
-# Core training
-# -----------------------------
-
-def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
-
+def train_net(cfg: TrainDEBBirthNetConfig, save: bool = False) -> Dict[str, Any]:
     set_seed(cfg.seed)
     device = resolve_device(cfg.device)
 
-    scaled_input_data, targets, dataloaders, datasets, scalers = load_data_pytorch(cfg)
+    scaled_input_data, targets, dataloaders, datasets, scaler = load_data_pytorch(cfg)
 
     # -------------------------
     # Model
@@ -75,7 +155,7 @@ def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay)
 
-    history: List[Dict[str, Any]] = []
+    history: List[EpochBinaryMetrics] = []
 
     # Train epochs (no early stopping)
     for epoch in range(1, cfg.epochs + 1):
@@ -99,27 +179,25 @@ def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
         # Validate
         val_metrics, val_loss = evaluate_pytorch_binary_classifier(model, dataloaders['val'], loss_fn, device=device)
 
-        row = {
-            "epoch": epoch,
-            "train_loss": train_loss,
-            "val_loss": val_loss,
-            "val_acc": val_metrics.accuracy,
-            "val_precision": val_metrics.precision,
-            "val_recall": val_metrics.recall,
-            "val_f1": val_metrics.f1,
-            "val_auroc": val_metrics.auroc,
-            "val_avg_precision": val_metrics.avg_precision,
-        }
-        history.append(row)
-        # maybe_ray_report(row)
+        # build an EpochBinaryMetrics instance (includes all BinaryMetrics fields + epoch/train_loss/val_loss)
+        epoch_row = EpochBinaryMetrics.from_binary_metrics(
+            val_metrics,
+            epoch=epoch,
+            train_loss=train_loss,
+            val_loss=val_loss,
+        )
+        history.append(epoch_row)
+        # maybe_ray_report(asdict(epoch_row))
 
         print(
             f"[{epoch:03d}/{cfg.epochs}] "
             f"train_loss={train_loss:.4f} val_loss={val_loss:.4f} "
-            f"val_f1={val_metrics.f1:.3f} val_auroc={val_metrics.auroc:.3f} val_ap={val_metrics.avg_precision:.3f}"
+            f"val_f1_macro={val_metrics.f1_macro:.3f} val_f1_pos={val_metrics.f1_pos:.3f} val_f1_neg={val_metrics.f1_neg:.3f}"
         )
 
-    (cfg.outdir / "history.json").write_text(json.dumps(history, indent=2))
+    # Save outputs: CSV history, last epoch metrics JSON, and model + scaler
+    if save:
+        save_run_results(cfg, history, model, scaler)
 
     # Pack and return
     return {
@@ -129,31 +207,8 @@ def train_net(cfg: TrainDEBBirthNetConfig) -> Dict[str, Any]:
         "targets": targets,
         "dataloaders": dataloaders,
         "datasets": datasets,
-        "scalers": scalers,
+        "scaler": scaler,
     }
-
-
-# -----------------------------
-# Ray Tune entrypoint
-# -----------------------------
-
-def trainable(config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Ray Tune entrypoint. Expects keys compatible with TrainConfig.
-
-    Tip: In Ray trials, set outdir=os.getcwd() so each trial writes to its own directory.
-    """
-    if "outdir" not in config or not config["outdir"]:
-        config = dict(config)
-        config["outdir"] = os.getcwd()
-
-    # Allow hidden_dims from Tune to be list-like or comma-separated
-    if isinstance(config.get("hidden_dims"), str):
-        config = dict(config)
-        config["hidden_dims"] = [int(s.strip()) for s in config["hidden_dims"].split(",") if s.strip()]
-
-    cfg = TrainDEBBirthNetConfig(**config)
-    return train_net(cfg)
 
 
 if __name__ == "__main__":
@@ -172,7 +227,7 @@ if __name__ == "__main__":
     cfg = TrainDEBBirthNetConfig(
         data_spec=data_spec,
         data_dir="data/processed/",
-        epochs=50,
+        epochs=100,
         batch_size=64,
         lr=1e-4,
         weight_decay=1e-3,
@@ -183,10 +238,13 @@ if __name__ == "__main__":
         num_workers=4,
         device="cpu",
     )
-    output = train_net(cfg)
+    output = train_net(cfg, save=True)
+    print("Validation metrics:")
+
+    loaded_output = load_run_results(outdir=cfg.outdir, device=cfg.device)
 
     test_metrics, test_loss = evaluate_pytorch_binary_classifier(
-        model=output["model"],
+        model=loaded_output["model"],
         dataloader=output["dataloaders"]["test"],
         loss_fn=torch.nn.BCEWithLogitsLoss(
             pos_weight=torch.tensor(cfg.pos_weight) if cfg.use_pos_weight and cfg.pos_weight is not None else None
@@ -195,3 +253,7 @@ if __name__ == "__main__":
     )
     print("\nTest metrics:")
     print(test_metrics)
+
+    # Save test metrics in cfg/metrics/test_metrics.json
+    test_metrics_path = cfg.outdir / "metrics" / "test_metrics.json"
+    test_metrics_path.write_text(json.dumps(asdict(test_metrics), indent=2, sort_keys=True))
