@@ -2,8 +2,9 @@ import csv
 import random
 from pathlib import Path
 from typing import Any, Dict
+from joblib import dump as joblib_dump, load as joblib_load
+import json
 import numpy as np
-from joblib import dump as joblib_dump
 
 from ...data.load import load_data_gp
 from .algorithm import DEBBirthSymbolicClassifier, create_gp_classifier
@@ -52,8 +53,15 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, 
     }
 
 
-def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_metrics: BinaryMetrics) -> None:
-    """Persist model + config + validation metrics + run details."""
+def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_metrics: BinaryMetrics,
+                save_all_programs: bool = False) -> None:
+    """Persist model + config + validation metrics + run details.
+
+    Args:
+      save_all_programs: if False (default) remove the attribute '_programs' from the model
+                         before saving to avoid storing all intermediate programs. The original
+                         model object is restored after saving. If True, the model is saved as-is.
+    """
     cfg.outdir.mkdir(parents=True, exist_ok=True)
 
     # Save train config
@@ -81,8 +89,49 @@ def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_me
         #     # don't fail run saving if sympy conversion fails; just continue
         #     pass
 
-    joblib_dump(model, cfg.outdir / "model" / "gp_model.joblib")
+    # When not saving all programs, temporarily remove _programs to avoid saving large histories
+    restored_programs = None
+    removed_programs = False
+    if not save_all_programs and hasattr(model, "_programs"):
+        try:
+            restored_programs = getattr(model, "_programs")
+            delattr(model, "_programs")
+            removed_programs = True
+        except Exception:
+            restored_programs = None
+            removed_programs = False
 
+    # Also temporarily remove run_details_ (stored separately as CSV) to avoid duplicating it in the saved object
+    restored_run_details = None
+    removed_run_details = False
+    if hasattr(model, "run_details_"):
+        try:
+            restored_run_details = getattr(model, "run_details_")
+            delattr(model, "run_details_")
+            removed_run_details = True
+        except Exception:
+            restored_run_details = None
+            removed_run_details = False
+
+    try:
+        joblib_dump(model, cfg.outdir / "model" / "gp_model.joblib")
+    finally:
+        # restore _programs on the original model object if we removed it
+        if removed_programs:
+            try:
+                setattr(model, "_programs", restored_programs)
+            except Exception:
+                # best-effort restore; do not raise if restore fails
+                pass
+        # restore run_details_ on the original model object if we removed it
+        if removed_run_details:
+            try:
+                setattr(model, "run_details_", restored_run_details)
+            except Exception:
+                # best-effort restore; do not raise if restore fails
+                pass
+
+    # write run_details_ CSV if present (we restored it above)
     if hasattr(model, "run_details_"):
         details = getattr(model, "run_details_")
         write_gp_run_history(details, cfg.outdir / "history.csv")
@@ -109,6 +158,47 @@ def write_gp_run_history(run_details: Any, path: Path) -> None:
         for i in range(n):
             row = {k: run_details[k][i] for k in keys}
             writer.writerow(row)
+
+
+def load_gp_run(outdir: Path) -> Dict[str, Any]:
+    """
+    Load a previously saved GP run directory created by save_gp_run.
+
+    Expects structure:
+      outdir/
+        train_gp_config.json
+        model/gp_model.joblib
+
+    Returns a dict:
+      {
+        "model": loaded joblib model,
+        "train_cfg": TrainGPConfig or None,
+      }
+    """
+    outdir = Path(outdir)
+    if not outdir.exists():
+        raise FileNotFoundError(f"Run outdir not found: {outdir}")
+
+    cfg_path = outdir / "train_gp_config.json"
+    model_dir = outdir / "model"
+
+
+    # load model via joblib
+    model_path = model_dir / "gp_model.joblib"
+    model = joblib_load(model_path)
+
+    # load train config (as TrainGPConfig dataclass) via helper method
+    train_cfg_obj = None
+    if cfg_path.exists():
+        try:
+            train_cfg_obj = TrainGPConfig.load_json(cfg_path)
+        except Exception:
+            train_cfg_obj = None
+
+    return {
+        "model": model,
+        "train_cfg": train_cfg_obj,
+    }
 
 
 if __name__ == "__main__":
