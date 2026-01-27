@@ -110,31 +110,24 @@ class TrainGPConfig:
             json.dump(asdict(self), f, indent=2, sort_keys=True, default=str)
 
     @classmethod
-    def load_json(cls, path: Any) -> Optional["TrainGPConfig"]:
+    def load_json(cls, path: Any) -> TrainGPConfig:
         """Load a TrainGPConfig from a JSON file, converting nested structures.
 
         Returns a TrainGPConfig instance or None if loading/parsing fails.
         """
         p = Path(path)
-        if not p.exists():
-            return None
-        try:
-            raw = json.loads(p.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                return None
+        raw = json.loads(p.read_text(encoding="utf-8"))
 
-            # Convert nested 'gp' dict to GPConfig if present
-            gp_dict = raw.get("gp")
-            if isinstance(gp_dict, dict):
-                raw["gp"] = GPConfig(**gp_dict)
+        # Convert nested 'gp' dict to GPConfig if present
+        gp_dict = raw.get("gp")
+        if isinstance(gp_dict, dict):
+            raw["gp"] = GPConfig(**gp_dict)
 
-            # Convert 'data_spec' dict to DatasetSpec if present
-            ds = raw.get("data_spec")
-            if isinstance(ds, dict):
-                raw["data_spec"] = DatasetSpec(**ds)
+        # Convert 'data_spec' dict to DatasetSpec if present
+        ds = raw.get("data_spec")
+        if isinstance(ds, dict):
+            raw["data_spec"] = DatasetSpec(**ds)
 
-            # Instantiate TrainGPConfig (post-init will coerce paths)
-            return cls(**raw)
-        except Exception:
-            return None
+        # Instantiate TrainGPConfig (post-init will coerce paths)
+        return cls(**raw)
 
