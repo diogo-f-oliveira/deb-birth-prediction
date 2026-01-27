@@ -39,8 +39,8 @@ def _dirichlet3_from_uniforms(u1, u2, a1=1, a2=1, a3=1, eps=1e-12):
 
 
 def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state: int = 42,
-                    report_metrics: bool = False, verbose: int = 0, num_workers=1, **gp_config_params) -> Optional[
-    Dict[str, Any]]:
+                    report_metrics: bool = False, verbose: int = 0, num_workers=1, save_run: bool = False, 
+                    **gp_config_params) -> Optional[Dict[str, Any]]:
     """Evaluate a given hyperparameter configuration for genetic programming symbolic classifier."""
 
     population_size = config.get("pop_size")
@@ -105,7 +105,7 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
         num_workers=num_workers,
     )
     # Run training (this may be slow depending on population/generations).
-    output = train_gp_classifier(train_cfg, save_run=False)
+    output = train_gp_classifier(train_cfg, save_run=save_run)
     output['train_config'] = train_cfg
     val_metrics = output.get("val_metrics")
 
@@ -139,6 +139,7 @@ def hyperopt_calibration(search_space: Dict[str, Any],
                         report_metrics=True,
                         verbose=0,
                         random_state=random_state,
+                        save_run=False,
                         **gp_config_params)
 
     alg = HyperOptSearch(metric=metric, mode=mode, points_to_evaluate=current_best_params,
@@ -206,7 +207,7 @@ if __name__ == '__main__':
     data_spec = DatasetSpec(
         feature_set="dimensionless"
     )
-
+    """
     # Evaluate a single configuration
     cfg = {
         "pop_size": 1000,
@@ -219,9 +220,9 @@ if __name__ == '__main__':
         "u2_hoist": .831898,
     }
     output = evaluate_config(config=cfg, data_spec=data_spec, random_state=seed, report_metrics=False,
-                                  verbose=True, num_workers=-1)
+                                  verbose=True, num_workers=-1, save_run=True)
     print(output["val_metrics"])
-
+    """
     # Hyperparameter optimization
     search_space = {
         "pop_size": 1000,
@@ -238,12 +239,12 @@ if __name__ == '__main__':
     best_output = hyperopt_calibration(
         search_space=search_space,
         data_spec=data_spec,
-        num_samples=20,
+        num_samples=150,
         metric='f1_macro',
         mode='max',
         # run_name='GPSC_Hyperopt_Test',
         # tune_dir='results/tune',
-        max_concurrent_trials=2,
+        max_concurrent_trials=None,
         evaluate_on_test=True,
         save_best_model=True,
         random_state=seed,
