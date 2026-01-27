@@ -66,7 +66,7 @@ class TrainGPConfig:
     low_memory: bool = False
     verbose: int = 0
 
-    class_weights: ClassWeight = None
+    class_weights: ClassWeight = "balanced"
 
     seed: int = 42
     num_workers: int = 1

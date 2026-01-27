@@ -101,11 +101,9 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
         data_spec=data_spec,
         outdir=None,
         verbose=verbose,
-        class_weights=config.get("class_weights", None),
         seed=random_state,
         num_workers=num_workers,
     )
-
     # Run training (this may be slow depending on population/generations).
     output = train_gp_classifier(train_cfg, save_run=False)
     output['train_config'] = train_cfg
@@ -210,21 +208,19 @@ if __name__ == '__main__':
     )
 
     # Evaluate a single configuration
-    # cfg = {
-    #     "population_size": 100,
-    #     "generations": 10,
-    #     "tournament_fraction": .2,
-    #     "parsimony_coefficient": 1e-3,
-    #     "p_reprod": .1,
-    #     "p_mut_total": .1,
-    #     "u1_subtree": .3,
-    #     "u2_hoist": .3,
-    #     "seed": 42,
-    #     "outdir": None,
-    # }
-    # val_metrics = evaluate_config(config=cfg, data_spec=data_spec, random_state=seed, report_metrics=False,
-    #                               verbose=True)
-    # print(val_metrics)
+    cfg = {
+        "pop_size": 1000,
+        "n_gen": 50,
+        "tourn_frac": .14,
+        "parsi_coef": 2e-5,
+        "p_reprod": .15,
+        "p_mut_total": .14,
+        "u1_subtree": .807094,
+        "u2_hoist": .831898,
+    }
+    output = evaluate_config(config=cfg, data_spec=data_spec, random_state=seed, report_metrics=False,
+                                  verbose=True, num_workers=-1)
+    print(output["val_metrics"])
 
     # Hyperparameter optimization
     search_space = {
