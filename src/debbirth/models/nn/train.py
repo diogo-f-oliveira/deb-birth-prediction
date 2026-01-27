@@ -45,7 +45,8 @@ def save_run_results(cfg: TrainDEBBirthNetConfig, history: List[EpochBinaryMetri
     # Save val_metrics.json (last entry from history)
     metrics_path = metrics_dir / "val_metrics.json"
     last = history[-1]
-    metrics_path.write_text(json.dumps(asdict(last), indent=2, sort_keys=True))
+    # use dataclass serializer on BinaryMetrics/EpochBinaryMetrics
+    last.save_json(metrics_path)
 
     # Save model_state_dict and scaler so they can later be loaded
     model_dir = outdir / "model"
@@ -62,10 +63,9 @@ def save_run_results(cfg: TrainDEBBirthNetConfig, history: List[EpochBinaryMetri
     save_scaler(scaler, scaler_path)
 
 
-# New helper: load a saved run (model + scaler + config) from an outdir produced by save_run_results.
-def load_run_results(outdir: Any, device: Any = None) -> Dict[str, Any]:
+def load_trained_nn(outdir: Any, device: Any = None) -> Dict[str, Any]:
     """
-    Load model, scaler and config from a saved run directory.
+    Load a trained model, scaler and config from a saved run directory.
 
     Args:
       outdir: path to run output dir (string or Path). Expects a 'model/' subdir and a JSON config.
@@ -119,7 +119,6 @@ def load_run_results(outdir: Any, device: Any = None) -> Dict[str, Any]:
     model = model.to(map_device)
 
     # Attempt to load scaler
-    scaler = None
     scaler_path = model_dir / "scaler.pth"
     scaler = load_scaler(scaler_path, map_location=map_device)
 
@@ -128,7 +127,6 @@ def load_run_results(outdir: Any, device: Any = None) -> Dict[str, Any]:
         "scaler": scaler,
         "train_cfg": train_cfg_dict,
         "net_cfg": net_cfg_dict,
-        "model_state_path": state_path,
     }
 
 
@@ -187,7 +185,6 @@ def train_net(cfg: TrainDEBBirthNetConfig, save: bool = False) -> Dict[str, Any]
             val_loss=val_loss,
         )
         history.append(epoch_row)
-        # maybe_ray_report(asdict(epoch_row))
 
         print(
             f"[{epoch:03d}/{cfg.epochs}] "
@@ -203,6 +200,7 @@ def train_net(cfg: TrainDEBBirthNetConfig, save: bool = False) -> Dict[str, Any]
     return {
         "model": model,
         "history": history,
+        "val_metrics": history[-1],
         "scaled_input_data": scaled_input_data,
         "targets": targets,
         "dataloaders": dataloaders,
@@ -240,8 +238,9 @@ if __name__ == "__main__":
     )
     output = train_net(cfg, save=True)
     print("Validation metrics:")
+    print(output["val_metrics"])
 
-    loaded_output = load_run_results(outdir=cfg.outdir, device=cfg.device)
+    loaded_output = load_trained_nn(outdir=cfg.outdir, device=cfg.device)
 
     test_metrics, test_loss = evaluate_pytorch_binary_classifier(
         model=loaded_output["model"],
@@ -256,4 +255,5 @@ if __name__ == "__main__":
 
     # Save test metrics in cfg/metrics/test_metrics.json
     test_metrics_path = cfg.outdir / "metrics" / "test_metrics.json"
-    test_metrics_path.write_text(json.dumps(asdict(test_metrics), indent=2, sort_keys=True))
+    # use dataclass save helper
+    test_metrics.save_json(test_metrics_path)
