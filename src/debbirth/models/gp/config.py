@@ -26,7 +26,7 @@ class GPConfig:
     constants: GPConstantSet = DEFAULT_CONSTANT_SET
 
     # Initialization
-    init_depth: Tuple[int, int] = (2, 6)
+    init_depth: Tuple[int, int] = (6, 10)
     init_method: str = "half and half"  # {'grow','full','half and half'}
 
     # Classification specifics
