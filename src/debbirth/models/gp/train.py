@@ -242,7 +242,13 @@ if __name__ == "__main__":
     print("\nValidation metrics:")
     print(output["val_metrics"])
 
-    test_metrics = evaluate_binary_classifier(model=output["model"], X=output['features']['test'],
+    loaded_output = load_gp_run(cfg.outdir)
+
+    test_metrics = evaluate_binary_classifier(model=loaded_output["model"], X=output['features']['test'],
                                               y=output['targets']['test'])
     print("\nTest metrics:")
     print(test_metrics)
+
+    # Save test metrics in cfg/metrics/test_metrics.json
+    test_metrics_path = cfg.outdir / "metrics" / "test_metrics.json"
+    test_metrics.save_json(test_metrics_path)

@@ -41,14 +41,14 @@
       "add",
       "sub",
       "mul",
-      "<gplearn.functions._Function object at 0x000001DDF1E8A410>",
+      "<gplearn.functions._Function object at 0x0000016409F7C3A0>",
       "sqrt",
-      "<gplearn.functions._Function object at 0x000001DDF1E8B610>",
-      "<gplearn.functions._Function object at 0x000001DDF1E886A0>",
+      "<gplearn.functions._Function object at 0x0000016409F7C3D0>",
+      "<gplearn.functions._Function object at 0x0000016409F7C430>",
       "neg",
-      "<gplearn.functions._Function object at 0x000001DDF1E88790>",
-      "<gplearn.functions._Function object at 0x000001DDF1E88820>",
-      "<gplearn.functions._Function object at 0x000001DDF1E88910>"
+      "<gplearn.functions._Function object at 0x0000016409F7C550>",
+      "<gplearn.functions._Function object at 0x0000016409F7C610>",
+      "<gplearn.functions._Function object at 0x0000016409F7C670>"
     ],
     "generations": 50,
     "init_depth": [
@@ -69,7 +69,7 @@
   },
   "low_memory": false,
   "num_workers": -1,
-  "outdir": "results\\runs\\2026-01-27T19-07-43_DEBBirthSymbolicClassifier",
+  "outdir": "results\\runs\\2026-01-27T22-26-45_DEBBirthSymbolicClassifier",
   "run_name": null,
   "seed": 42,
   "verbose": 1
