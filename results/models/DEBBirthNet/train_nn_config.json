@@ -16,11 +16,11 @@
       32,
       32
     ],
-    "input_dim": 5,
+    "input_dim": 4,
     "threshold": 0.5
   },
   "num_workers": 4,
-  "outdir": "results\\runs\\2026-01-27T13-17-37_DEBBirthNet",
+  "outdir": "results\\runs\\2026-01-27T17-27-50_DEBBirthNet",
   "pos_weight": 0.11595930904150009,
   "scaling_type": "log_standardize",
   "seed": 42,
