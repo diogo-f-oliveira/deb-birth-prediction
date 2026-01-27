@@ -11,6 +11,7 @@ class BaseScaler(nn.Module):
     Minimal base scaler: registers common buffers and provides save/load + hooks.
     Does NOT implement any standardization logic — subclasses must implement fit/partial_fit/transform/inverse_transform.
     """
+
     def __init__(self, with_mean: bool = True, with_std: bool = True, eps: float = 1e-8):
         super().__init__()
         self.with_mean = with_mean
@@ -101,6 +102,34 @@ class TorchStandardScaler(BaseScaler):
     Standardization scaler: implements fit/partial_fit/transform/inverse_transform.
     Uses _preprocess/_inverse_preprocess hook to allow subclasses to change input representation.
     """
+
+    # New helper to set fitted buffers and n_samples_seen_
+    def _set_fitted_params(self, mean: torch.Tensor, var: torch.Tensor, n_samples: int, device=None) -> None:
+        """
+        Centralize setting mean_, var_, scale_ and n_samples_seen_.
+        mean/var are expected on the target device or will be moved there.
+        """
+        if device is None:
+            device = mean.device if isinstance(mean, torch.Tensor) and mean.numel() else self.mean_.device if self.mean_.numel() else None
+
+        if not self.with_mean:
+            mean = torch.zeros_like(mean)
+        if not self.with_std:
+            var = torch.ones_like(var)
+
+        scale = torch.sqrt(var + self.eps)
+        scale = torch.where(scale == 0, torch.ones_like(scale), scale)
+
+        if device is not None:
+            mean = mean.to(device)
+            var = var.to(device)
+            scale = scale.to(device)
+
+        object.__setattr__(self, "mean_", mean.detach())
+        object.__setattr__(self, "var_", var.detach())
+        object.__setattr__(self, "scale_", scale.detach())
+        object.__setattr__(self, "n_samples_seen_", torch.tensor(int(n_samples), dtype=torch.long, device=mean.device if isinstance(mean, torch.Tensor) and mean.numel() else None))
+
     def fit(self, X, sample_dim: int = 0):
         X = self._to_tensor(X)
         if X.numel() == 0:
@@ -114,19 +143,9 @@ class TorchStandardScaler(BaseScaler):
         mean = Xp.mean(dim=sample_dim)
         var = Xp.var(dim=sample_dim, unbiased=False)
 
-        if not self.with_mean:
-            mean = torch.zeros_like(mean)
-        if not self.with_std:
-            var = torch.ones_like(var)
-
-        scale = torch.sqrt(var + self.eps)
-        scale = torch.where(scale == 0, torch.ones_like(scale), scale)
-
-        object.__setattr__(self, "mean_", mean.detach())
-        object.__setattr__(self, "var_", var.detach())
-        object.__setattr__(self, "scale_", scale.detach())
         n = X.shape[sample_dim]
-        object.__setattr__(self, "n_samples_seen_", torch.tensor(int(n), dtype=torch.long, device=device))
+        # reuse helper to set buffers
+        self._set_fitted_params(mean, var, n, device=device)
         return self
 
     def partial_fit(self, X, sample_dim: int = 0):
@@ -142,18 +161,9 @@ class TorchStandardScaler(BaseScaler):
         mean_new = Xp.mean(dim=sample_dim)
         var_new = Xp.var(dim=sample_dim, unbiased=False)
 
-        if not self.with_mean:
-            mean_new = torch.zeros_like(mean_new)
-        if not self.with_std:
-            var_new = torch.ones_like(var_new)
-
         if self.n_samples_seen_.numel() == 0 or int(self.n_samples_seen_) == 0:
-            object.__setattr__(self, "mean_", mean_new.detach())
-            object.__setattr__(self, "var_", var_new.detach())
-            scale_ = torch.sqrt(self.var_ + self.eps)
-            scale_ = torch.where(scale_ == 0, torch.ones_like(scale_), scale_)
-            object.__setattr__(self, "scale_", scale_)
-            object.__setattr__(self, "n_samples_seen_", torch.tensor(int(n_new), dtype=torch.long, device=device))
+            # set from new batch
+            self._set_fitted_params(mean_new, var_new, n_new, device=device)
             return self
 
         n_old = int(self.n_samples_seen_)
@@ -167,12 +177,8 @@ class TorchStandardScaler(BaseScaler):
         delta_new = mean_new - mean_total
         var_total = (n_old * var_old + n_new * var_new + n_old * (delta_old ** 2) + n_new * (delta_new ** 2)) / n_total
 
-        object.__setattr__(self, "mean_", mean_total.detach())
-        object.__setattr__(self, "var_", var_total.detach())
-        scale_ = torch.sqrt(self.var_ + self.eps)
-        scale_ = torch.where(scale_ == 0, torch.ones_like(scale_), scale_)
-        object.__setattr__(self, "scale_", scale_)
-        object.__setattr__(self, "n_samples_seen_", torch.tensor(int(n_total), dtype=torch.long, device=device))
+        # reuse helper to set updated buffers
+        self._set_fitted_params(mean_total, var_total, n_total, device=device)
         return self
 
     def transform(self, X):
@@ -199,6 +205,7 @@ class TorchLogStandardScaler(TorchStandardScaler):
     Log + standardize scaler: inherits all standardization behaviour and only
     overrides preprocessing hooks to apply log/exp.
     """
+
     def _preprocess(self, X: torch.Tensor) -> torch.Tensor:
         # Apply log transform; users must ensure X > 0
         return torch.log(X)
@@ -207,7 +214,7 @@ class TorchLogStandardScaler(TorchStandardScaler):
         return torch.exp(X)
 
 
-def scale_data_pytorch(data, scaling_type: str, device=None):
+def fit_and_scale_data_pytorch(data, scaling_type: str, device=None):
     """
     Scale data using Scaler classes.
 
@@ -254,6 +261,35 @@ def scale_data_pytorch(data, scaling_type: str, device=None):
     if device is not None:
         scaler = scaler.to(device)
 
+    scaled_data = scale_data_pytorch(data=data, scaler=scaler, device=device)
+
+    return scaled_data, scaler
+
+
+def scale_data_pytorch(data, scaler: BaseScaler, device=None):
+    """
+    Scale data using a provided scaler instance.
+
+    Arguments:
+      - data: mapping (e.g. dict) of splits -> arrays/tensors
+      - scaler: fitted scaler instance (e.g. TorchStandardScaler or TorchLogStandardScaler)
+      - device: Optional device (str or torch.device). If provided, all transformed outputs will be moved to this device.
+        If None, device is inferred from the data/scaler.
+
+    Returns:
+      scaled_data: dict with same keys as input mapped to torch.Tensor
+    """
+    if scaler is None:
+        raise ValueError("scale_data_pytorch requires a scaler instance.")
+
+    # ensure scaler is fitted
+    if not scaler.fitted_:
+        raise RuntimeError("Provided scaler instance is not fitted yet. Call fit or partial_fit first.")
+
+    # normalize device argument
+    if device is not None:
+        device = resolve_device(device)
+
     # transform all splits
     scaled_data = {}
     for split_name, split_array in data.items():
@@ -263,7 +299,7 @@ def scale_data_pytorch(data, scaling_type: str, device=None):
         split_tensor = split_tensor.to(target_device)
         scaled_data[split_name] = scaler.transform(split_tensor)
 
-    return scaled_data, scaler
+    return scaled_data
 
 
 def save_scaler(scaler: nn.Module, path: Union[str, "Path"]) -> None:

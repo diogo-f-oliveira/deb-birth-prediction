@@ -7,10 +7,11 @@ import pandas as pd
 from torch.utils.data import TensorDataset, DataLoader
 
 from .schema import DatasetSpec
-from .scalers import scale_data_pytorch
+from .scalers import fit_and_scale_data_pytorch, scale_data_pytorch
 from ..models.nn.config import TrainDEBBirthNetConfig
 from ..models.gp.config import TrainGPConfig
 from ..utils.pytorch import convert_to_tensor
+
 
 def load_splits(dataset_dir: str, split_type='train_val_test') -> Dict[str, pd.DataFrame]:
     """
@@ -31,18 +32,24 @@ def load_splits(dataset_dir: str, split_type='train_val_test') -> Dict[str, pd.D
         }
     return {}
 
+
 def get_features_targets(data: Dict[str, pd.DataFrame], data_spec: DatasetSpec):
     features = {split: df[data_spec.feature_cols] for split, df in data.items()}
     targets = {split: df[data_spec.target_col] for split, df in data.items()}
     return features, targets
 
 
-def load_data_pytorch(config: TrainDEBBirthNetConfig):
+def load_data_pytorch(config: TrainDEBBirthNetConfig, scaler=None):
     # Load dataframes
     data = load_splits(dataset_dir=config.data_dir, split_type=config.data_splits)
-    # Extract input features and scale
+    # Extract input features and targets
     features, targets = get_features_targets(data=data, data_spec=config.data_spec)
-    scaled_input_data, scaler = scale_data_pytorch(features, scaling_type=config.scaling_type)
+    # Scale and convert features to tensors
+    if scaler is None:
+        scaled_input_data, scaler = fit_and_scale_data_pytorch(features, scaling_type=config.scaling_type,
+                                                               device=config.device)
+    else:
+        scaled_input_data = scale_data_pytorch(features, scaler, device=config.device)
     # Extract output and convert to tensors
     targets_tensor = {split: convert_to_tensor(df.astype(float)) for split, df in targets.items()}
 
@@ -62,6 +69,7 @@ def load_data_pytorch(config: TrainDEBBirthNetConfig):
         )
 
     return scaled_input_data, targets_tensor, dataloaders, datasets, scaler
+
 
 def load_data_gp(cfg: TrainGPConfig) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
     """Load splits and return features and targets as numpy arrays for GP training.
