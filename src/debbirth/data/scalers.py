@@ -65,7 +65,7 @@ class BaseScaler(nn.Module):
         torch.save(data, p)
 
     @classmethod
-    def load(cls, path: Union[str, "Path"], map_location: Any = None) -> "BaseScaler":
+    def load(cls, path: Union[str, Path], map_location: Any = None) -> "BaseScaler":
         """
         Generic loader that maps tensors to map_location and pre-sets buffers
         present in the saved state to avoid size-mismatch when loading.
@@ -78,22 +78,22 @@ class BaseScaler(nn.Module):
                    eps=init.get("eps", 1e-8))
 
         # pre-set buffers from state if available to avoid shape mismatches
-        try:
-            if isinstance(state, dict):
-                for name in ("mean_", "var_", "scale_", "n_samples_seen_"):
-                    if name in state:
-                        val = state[name]
-                        if name == "n_samples_seen_":
-                            try:
-                                val = val.to(dtype=torch.long)
-                            except Exception:
-                                val = torch.tensor(int(val), dtype=torch.long,
-                                                   device=val.device if hasattr(val, "device") else None)
-                        object.__setattr__(inst, name, val)
-                inst.load_state_dict(state, strict=False)
-        except Exception:
-            # fallback to direct load (may raise)
-            inst.load_state_dict(state)
+
+        if isinstance(state, dict):
+            for name in ("mean_", "var_", "scale_", "n_samples_seen_"):
+                if name in state:
+                    val = state[name]
+                    if name == "n_samples_seen_":
+                        try:
+                            val = val.to(dtype=torch.long)
+                        except Exception:
+                            val = torch.tensor(
+                                int(val),
+                                dtype=torch.long,
+                                device=val.device if hasattr(val, "device") else None
+                            )
+                    inst.register_buffer(name, val)
+            inst.load_state_dict(state, strict=False)
         return inst
 
 
@@ -110,7 +110,8 @@ class TorchStandardScaler(BaseScaler):
         mean/var are expected on the target device or will be moved there.
         """
         if device is None:
-            device = mean.device if isinstance(mean, torch.Tensor) and mean.numel() else self.mean_.device if self.mean_.numel() else None
+            device = mean.device if isinstance(mean,
+                                               torch.Tensor) and mean.numel() else self.mean_.device if self.mean_.numel() else None
 
         if not self.with_mean:
             mean = torch.zeros_like(mean)
@@ -125,10 +126,17 @@ class TorchStandardScaler(BaseScaler):
             var = var.to(device)
             scale = scale.to(device)
 
-        object.__setattr__(self, "mean_", mean.detach())
-        object.__setattr__(self, "var_", var.detach())
-        object.__setattr__(self, "scale_", scale.detach())
-        object.__setattr__(self, "n_samples_seen_", torch.tensor(int(n_samples), dtype=torch.long, device=mean.device if isinstance(mean, torch.Tensor) and mean.numel() else None))
+        # register/update buffers so they appear in state_dict()
+        self.register_buffer("mean_", mean.detach())
+        self.register_buffer("var_", var.detach())
+        self.register_buffer("scale_", scale.detach())
+
+        n_tensor = torch.tensor(
+            int(n_samples),
+            dtype=torch.long,
+            device=mean.device if isinstance(mean, torch.Tensor) and mean.numel() else None,
+        )
+        self.register_buffer("n_samples_seen_", n_tensor)
 
     def fit(self, X, sample_dim: int = 0):
         X = self._to_tensor(X)
@@ -287,7 +295,7 @@ def scale_data_pytorch(data, scaler: BaseScaler, device=None):
         raise RuntimeError("Provided scaler instance is not fitted yet. Call fit or partial_fit first.")
 
     # normalize device argument
-    if device is not None:
+    if device is not None and not isinstance(device, torch.device):
         device = resolve_device(device)
 
     # transform all splits
@@ -314,7 +322,7 @@ def save_scaler(scaler: nn.Module, path: Union[str, "Path"]) -> None:
         torch.save({"class": scaler.__class__.__name__, "state": scaler.state_dict()}, p)
 
 
-def load_scaler(path: Union[str, "Path"], map_location: Any = None) -> nn.Module:
+def load_scaler(path: Union[str, Path], map_location: Any = None) -> nn.Module:
     """Load a scaler saved with save_scaler or scaler.save.
 
     Returns an instance of the correct scaler class.
@@ -323,13 +331,7 @@ def load_scaler(path: Union[str, "Path"], map_location: Any = None) -> nn.Module
     cls_name = data.get("class", "")
     if cls_name == "TorchStandardScaler":
         return TorchStandardScaler.load(path, map_location=map_location)
-    if cls_name == "TorchLogStandardScaler":
+    elif cls_name == "TorchLogStandardScaler":
         return TorchLogStandardScaler.load(path, map_location=map_location)
-
-    # fallback: try to construct generic nn.Module and load state
-    init = data.get("init", {})
-    state = data.get("state", data)
-    # try TorchStandardScaler as fallback
-    inst = TorchStandardScaler()
-    inst.load_state_dict(state if isinstance(state, dict) else {})
-    return inst
+    else:
+        raise ValueError(f"Unknown scaler class '{cls_name}' in saved file '{path}'.")
