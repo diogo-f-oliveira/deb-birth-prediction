@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import json
+from typing import Optional, Any, Dict
 
 import numpy as np
 import torch
@@ -36,13 +37,9 @@ def compute_pos_weight(y_train: torch.Tensor) -> torch.Tensor:
 
 @dataclass(frozen=True)
 class BinaryMetrics:
-    # overall / positive-class aliases (backwards compatible)
     accuracy: float
-    precision: float  # alias for positive class precision
-    recall: float     # alias for positive class recall
-    f1: float         # alias for positive class f1
 
-    # explicit per-class metrics
+    # Per-class metrics
     precision_pos: float
     recall_pos: float
     f1_pos: float
@@ -51,12 +48,12 @@ class BinaryMetrics:
     recall_neg: float
     f1_neg: float
 
-    # macro averages
+    # Macro averages
     precision_macro: float
     recall_macro: float
     f1_macro: float
 
-    # ranking / probabilistic metrics (positive-class)
+    # Ranking / probabilistic metrics (positive-class)
     auroc: float
     avg_precision: float
 
@@ -75,9 +72,6 @@ class BinaryMetrics:
         nan = float("nan")
         return cls(
             accuracy=nan,
-            precision=nan,
-            recall=nan,
-            f1=nan,
             precision_pos=nan,
             recall_pos=nan,
             f1_pos=nan,
@@ -131,6 +125,18 @@ class BinaryMetrics:
         with p.open("w", encoding="utf-8") as f:
             json.dump(asdict(self), f, indent=2, sort_keys=True)
 
+    # New: load metrics from JSON file. Returns BinaryMetrics or EpochBinaryMetrics or None on failure.
+    @classmethod
+    def load_json(cls, path: Any) -> BinaryMetrics:
+        """
+        Load metrics saved with save_json. If the JSON contains an 'epoch' key an
+        EpochBinaryMetrics will be returned; otherwise a BinaryMetrics.
+        Returns None if the file does not exist or cannot be parsed.
+        """
+        p = Path(path)
+        raw = json.loads(p.read_text(encoding="utf-8"))
+        return cls(**raw)
+
 
 # New subclass that extends BinaryMetrics with epoch/train_loss/val_loss
 @dataclass(frozen=True)
@@ -140,11 +146,11 @@ class EpochBinaryMetrics(BinaryMetrics):
     val_loss: float
 
     @classmethod
-    def from_binary_metrics(cls, bm: BinaryMetrics, *, epoch: int, train_loss: float, val_loss: float) -> "EpochBinaryMetrics":
+    def from_binary_metrics(cls, bm: BinaryMetrics, *, epoch: int, train_loss: float,
+                            val_loss: float) -> "EpochBinaryMetrics":
         """Create an EpochBinaryMetrics from an existing BinaryMetrics plus epoch/loss info."""
         # Convert base dataclass to dict then pass through to subclass constructor
         base = asdict(bm)
         # asdict includes all BinaryMetrics fields; extend with epoch/loss
         base.update({"epoch": int(epoch), "train_loss": float(train_loss), "val_loss": float(val_loss)})
         return cls(**base)
-

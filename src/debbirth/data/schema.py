@@ -60,7 +60,8 @@ DIMENSIONLESS_COMPOUND_COLS: tuple[str, ...] = (
 
 # Convenience "named feature sets" used by config files / CLI
 FEATURE_SETS: Mapping[str, Sequence[str]] = {
-    "dimensionless": DIMENSIONLESS_PARAMETER_COLS + DIMENSIONLESS_COMPOUND_COLS,
+    "dimensionless": DIMENSIONLESS_COMPOUND_COLS + ('f',),
+    "dimensionless_plus_kap": DIMENSIONLESS_COMPOUND_COLS + DIMENSIONLESS_PARAMETER_COLS,
     "parameters": PARAMETER_COLS,
     "compound_parameters": COMPOUND_COLS,
     "all": PARAMETER_COLS + COMPOUND_COLS,
