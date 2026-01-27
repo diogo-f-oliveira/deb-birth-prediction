@@ -1,0 +1,29 @@
+{
+  "batch_size": 64,
+  "data_dir": "data/processed/",
+  "data_spec": {
+    "feature_set": "dimensionless",
+    "target_col": "reached_birth"
+  },
+  "data_splits": "train_val_test",
+  "device": "cpu",
+  "epochs": 100,
+  "lr": 0.0001,
+  "net_config": {
+    "dropout": 0.2,
+    "hidden_dims": [
+      32,
+      32,
+      32
+    ],
+    "input_dim": 5,
+    "threshold": 0.5
+  },
+  "num_workers": 4,
+  "outdir": "results\\runs\\2026-01-27T13-17-37_DEBBirthNet",
+  "pos_weight": 0.11595930904150009,
+  "scaling_type": "log_standardize",
+  "seed": 42,
+  "use_pos_weight": true,
+  "weight_decay": 0.001
+}

@@ -1,0 +1,23 @@
+{
+  "accuracy": 0.9887296005770444,
+  "auroc": NaN,
+  "auroc_macro": NaN,
+  "avg_precision": NaN,
+  "avg_precision_macro": NaN,
+  "f1": 0.9936992791975402,
+  "f1_macro": 0.9701744368672294,
+  "f1_neg": 0.9466495945369184,
+  "f1_pos": 0.9936992791975402,
+  "fn": 83,
+  "fp": 42,
+  "precision": 0.9957571471865845,
+  "precision_macro": 0.9630631373516815,
+  "precision_neg": 0.9303691275167785,
+  "precision_pos": 0.9957571471865845,
+  "recall": 0.9916498993963783,
+  "recall_macro": 0.9775799453541405,
+  "recall_neg": 0.9635099913119027,
+  "recall_pos": 0.9916498993963783,
+  "tn": 1109,
+  "tp": 9857
+}
