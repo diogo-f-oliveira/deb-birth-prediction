@@ -1,6 +1,6 @@
 {
   "batch_size": 64,
-  "data_dir": "data/processed/",
+  "data_dir": "C:\\Users\\diogo\\OneDrive - Universidade de Lisboa\\Terraprima\\Code\\DEB Constraint Prediction\\deb-birth-prediction\\data\\processed",
   "data_spec": {
     "feature_set": "dimensionless",
     "target_col": "reached_birth"
@@ -20,7 +20,7 @@
     "threshold": 0.5
   },
   "num_workers": 4,
-  "outdir": "results\\runs\\2026-01-27T17-27-50_DEBBirthNet",
+  "outdir": "results\\runs\\2026-01-27T19-54-14_DEBBirthNet",
   "pos_weight": 0.11595930904150009,
   "scaling_type": "log_standardize",
   "seed": 42,
