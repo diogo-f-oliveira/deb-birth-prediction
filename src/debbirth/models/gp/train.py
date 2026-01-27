@@ -211,12 +211,15 @@ if __name__ == "__main__":
     data_spec = DatasetSpec(
         feature_set="dimensionless"
     )
-    gp_cfg: GPConfig = GPConfig(
+    gp_cfg = GPConfig(
         generations=50,
         population_size=1000,
-        tournament_size=50,
-        p_crossover=0.8,
-        parsimony_coefficient=0.001,
+        tournament_size=140,
+        p_crossover=0.70,
+        p_hoist_mutation=0.05,
+        p_point_mutation=0.01,
+        p_subtree_mutation=0.09,
+        parsimony_coefficient=6e-5,
         function_set=EXTENDED_FUNCTION_SET,
         constants=EXTENDED_CONSTANT_SET,
         init_depth=(6, 10),
@@ -228,18 +231,18 @@ if __name__ == "__main__":
         verbose=1,
         class_weights="balanced",
         seed=42,
-        num_workers=10,
+        num_workers=-1,
     )
     print(cfg)
     print()
 
-    output = train_gp_classifier(cfg)
+    output = train_gp_classifier(cfg, save_run=True)
     print("\nBest program:")
     print(output["best_program"])
     print("\nValidation metrics:")
     print(output["val_metrics"])
 
-    # test_metrics = evaluate_binary_classifier(model=output["model"], X=output['features']['test'],
-    #                                           y=output['targets']['test'])
-    # print("\nTest metrics:")
-    # print(test_metrics)
+    test_metrics = evaluate_binary_classifier(model=output["model"], X=output['features']['test'],
+                                              y=output['targets']['test'])
+    print("\nTest metrics:")
+    print(test_metrics)

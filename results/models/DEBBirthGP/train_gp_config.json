@@ -1,0 +1,76 @@
+{
+  "class_weights": "balanced",
+  "data_dir": "C:\\Users\\dmoliveira\\Documents\\deb-birth-prediction\\data\\processed",
+  "data_spec": {
+    "feature_set": "dimensionless",
+    "target_col": "reached_birth"
+  },
+  "data_splits": "train_val_test",
+  "gp": {
+    "constants": [
+      {
+        "name": "c1",
+        "value": 1.0
+      },
+      {
+        "name": "c2",
+        "value": 2.0
+      },
+      {
+        "name": "c3",
+        "value": 3.0
+      },
+      {
+        "name": "c1_2",
+        "value": 0.5
+      },
+      {
+        "name": "c1_3",
+        "value": 0.3333333333333333
+      },
+      {
+        "name": "sqrt2",
+        "value": 1.4142135623730951
+      },
+      {
+        "name": "sqrt3",
+        "value": 1.7320508075688772
+      }
+    ],
+    "function_set": [
+      "add",
+      "sub",
+      "mul",
+      "<gplearn.functions._Function object at 0x00000255D9C38E20>",
+      "sqrt",
+      "<gplearn.functions._Function object at 0x00000255D9C3B3A0>",
+      "<gplearn.functions._Function object at 0x00000255D9C39A50>",
+      "neg",
+      "<gplearn.functions._Function object at 0x00000255D9C39300>",
+      "<gplearn.functions._Function object at 0x00000255D9C3B520>",
+      "<gplearn.functions._Function object at 0x00000255D9C38910>"
+    ],
+    "generations": 50,
+    "init_depth": [
+      6,
+      10
+    ],
+    "init_method": "half and half",
+    "metric": "log loss",
+    "p_crossover": 0.7,
+    "p_hoist_mutation": 0.05,
+    "p_point_mutation": 0.01,
+    "p_point_replace": 0.05,
+    "p_subtree_mutation": 0.09,
+    "parsimony_coefficient": 6e-05,
+    "population_size": 1000,
+    "tournament_size": 140,
+    "transformer": "sigmoid"
+  },
+  "low_memory": false,
+  "num_workers": -1,
+  "outdir": "results\\runs\\2026-01-27T17-03-22_DEBBirthSymbolicClassifier",
+  "run_name": null,
+  "seed": 42,
+  "verbose": 1
+}
