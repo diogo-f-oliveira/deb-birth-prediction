@@ -1,6 +1,6 @@
 {
   "class_weights": "balanced",
-  "data_dir": "C:\\Users\\dmoliveira\\Documents\\deb-birth-prediction\\data\\processed",
+  "data_dir": "C:\\Users\\diogo\\OneDrive - Universidade de Lisboa\\Terraprima\\Code\\DEB Constraint Prediction\\deb-birth-prediction\\data\\processed",
   "data_spec": {
     "feature_set": "dimensionless",
     "target_col": "reached_birth"
@@ -41,14 +41,14 @@
       "add",
       "sub",
       "mul",
-      "<gplearn.functions._Function object at 0x00000255D9C38E20>",
+      "<gplearn.functions._Function object at 0x000001DDF1E8A410>",
       "sqrt",
-      "<gplearn.functions._Function object at 0x00000255D9C3B3A0>",
-      "<gplearn.functions._Function object at 0x00000255D9C39A50>",
+      "<gplearn.functions._Function object at 0x000001DDF1E8B610>",
+      "<gplearn.functions._Function object at 0x000001DDF1E886A0>",
       "neg",
-      "<gplearn.functions._Function object at 0x00000255D9C39300>",
-      "<gplearn.functions._Function object at 0x00000255D9C3B520>",
-      "<gplearn.functions._Function object at 0x00000255D9C38910>"
+      "<gplearn.functions._Function object at 0x000001DDF1E88790>",
+      "<gplearn.functions._Function object at 0x000001DDF1E88820>",
+      "<gplearn.functions._Function object at 0x000001DDF1E88910>"
     ],
     "generations": 50,
     "init_depth": [
@@ -69,7 +69,7 @@
   },
   "low_memory": false,
   "num_workers": -1,
-  "outdir": "results\\runs\\2026-01-27T17-03-22_DEBBirthSymbolicClassifier",
+  "outdir": "results\\runs\\2026-01-27T19-07-43_DEBBirthSymbolicClassifier",
   "run_name": null,
   "seed": 42,
   "verbose": 1
