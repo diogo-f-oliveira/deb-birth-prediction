@@ -131,3 +131,20 @@ class BinaryMetrics:
         with p.open("w", encoding="utf-8") as f:
             json.dump(asdict(self), f, indent=2, sort_keys=True)
 
+
+# New subclass that extends BinaryMetrics with epoch/train_loss/val_loss
+@dataclass(frozen=True)
+class EpochBinaryMetrics(BinaryMetrics):
+    epoch: int
+    train_loss: float
+    val_loss: float
+
+    @classmethod
+    def from_binary_metrics(cls, bm: BinaryMetrics, *, epoch: int, train_loss: float, val_loss: float) -> "EpochBinaryMetrics":
+        """Create an EpochBinaryMetrics from an existing BinaryMetrics plus epoch/loss info."""
+        # Convert base dataclass to dict then pass through to subclass constructor
+        base = asdict(bm)
+        # asdict includes all BinaryMetrics fields; extend with epoch/loss
+        base.update({"epoch": int(epoch), "train_loss": float(train_loss), "val_loss": float(val_loss)})
+        return cls(**base)
+
