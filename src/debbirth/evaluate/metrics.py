@@ -37,6 +37,8 @@ def compute_pos_weight(y_train: torch.Tensor) -> torch.Tensor:
 
 @dataclass(frozen=True)
 class BinaryMetrics:
+    accuracy: float
+
     # Per-class metrics
     precision_pos: float
     recall_pos: float
@@ -69,6 +71,7 @@ class BinaryMetrics:
     def empty(cls) -> BinaryMetrics:
         nan = float("nan")
         return cls(
+            accuracy=nan,
             precision_pos=nan,
             recall_pos=nan,
             f1_pos=nan,

@@ -83,11 +83,6 @@ def evaluate_binary_classifier(
     recall_neg, recall_pos = float(rec_arr[0]), float(rec_arr[1])
     f1_neg, f1_pos = float(f1_arr[0]), float(f1_arr[1])
 
-    # Keep legacy names as positive-class aliases
-    precision_pos_alias = precision_pos
-    recall_pos_alias = recall_pos
-    f1_pos_alias = f1_pos
-
     # Macro averaged classification metrics (use sklearn helpers / fallback)
     prec_macro = float(precision_score(y_true, y_pred, average="macro", zero_division=0))
     rec_macro = float(recall_score(y_true, y_pred, average="macro", zero_division=0))
@@ -128,9 +123,6 @@ def evaluate_binary_classifier(
 
     return BinaryMetrics(
         accuracy=acc,
-        precision=precision_pos_alias,
-        recall=recall_pos_alias,
-        f1=f1_pos_alias,
         precision_pos=precision_pos,
         recall_pos=recall_pos,
         f1_pos=f1_pos,
