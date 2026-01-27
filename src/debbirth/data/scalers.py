@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from ..utils.pytorch import convert_to_tensor, resolve_device
+from typing import Union, Any, Dict
 
 
 class TorchStandardScaler(nn.Module):
@@ -140,6 +141,27 @@ class TorchStandardScaler(nn.Module):
     def fitted_(self) -> bool:
         return bool(self.n_samples_seen_.numel() and int(self.n_samples_seen_) > 0)
 
+    def save(self, path: Union[str, "Path"]) -> None:
+        """Save scaler init args + state_dict to `path` using torch.save."""
+        from pathlib import Path
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "class": self.__class__.__name__,
+            "init": {"with_mean": self.with_mean, "with_std": self.with_std, "eps": self.eps},
+            "state": self.state_dict(),
+        }
+        torch.save(data, p)
+
+    @classmethod
+    def load(cls, path: Union[str, "Path"], map_location: Any = None) -> "TorchStandardScaler":
+        """Load scaler saved with .save() or save_scaler(...)."""
+        data = torch.load(path, map_location=map_location)
+        init = data.get("init", {})
+        inst = cls(with_mean=init.get("with_mean", True), with_std=init.get("with_std", True),
+                   eps=init.get("eps", 1e-8))
+        inst.load_state_dict(data.get("state", {}))
+        return inst
 
 
 # New: log then standardize scaler
@@ -151,6 +173,7 @@ class TorchLogStandardScaler(nn.Module):
     - Mirrors TorchStandardScaler API: fit, partial_fit, transform, inverse_transform, forward, fitted_.
     - All statistics (mean_, var_, scale_, n_samples_seen_) are registered as buffers.
     """
+
     def __init__(self, with_mean: bool = True, with_std: bool = True, eps: float = 1e-8):
         super().__init__()
         self.with_mean = with_mean
@@ -272,6 +295,28 @@ class TorchLogStandardScaler(nn.Module):
     def fitted_(self) -> bool:
         return bool(self.n_samples_seen_.numel() and int(self.n_samples_seen_) > 0)
 
+    def save(self, path: Union[str, "Path"]) -> None:
+        """Save scaler init args + state_dict to `path` using torch.save."""
+        from pathlib import Path
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "class": self.__class__.__name__,
+            "init": {"with_mean": self.with_mean, "with_std": self.with_std, "eps": self.eps},
+            "state": self.state_dict(),
+        }
+        torch.save(data, p)
+
+    @classmethod
+    def load(cls, path: Union[str, "Path"], map_location: Any = None) -> "TorchLogStandardScaler":
+        """Load scaler saved with .save() or save_scaler(...)."""
+        data = torch.load(path, map_location=map_location)
+        init = data.get("init", {})
+        inst = cls(with_mean=init.get("with_mean", True), with_std=init.get("with_std", True),
+                   eps=init.get("eps", 1e-8))
+        inst.load_state_dict(data.get("state", {}))
+        return inst
+
 
 def scale_data_pytorch(data, scaling_type: str, device=None):
     """
@@ -333,3 +378,37 @@ def scale_data_pytorch(data, scaling_type: str, device=None):
         scaled_data[split_name] = scaler.transform(split_tensor)
 
     return scaled_data, scaler
+
+
+def save_scaler(scaler: nn.Module, path: Union[str, "Path"]) -> None:
+    """Save a scaler (TorchStandardScaler or TorchLogStandardScaler) to disk."""
+    # rely on instance .save for consistent format
+    if hasattr(scaler, "save"):
+        scaler.save(path)
+    else:
+        from pathlib import Path
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        torch.save({"class": scaler.__class__.__name__, "state": scaler.state_dict()}, p)
+
+
+def load_scaler(path: Union[str, "Path"], map_location: Any = None) -> nn.Module:
+    """Load a scaler saved with save_scaler or scaler.save.
+
+    Returns an instance of the correct scaler class.
+    """
+    data = torch.load(path, map_location=map_location)
+    cls_name = data.get("class", "")
+    if cls_name == "TorchStandardScaler":
+        return TorchStandardScaler.load(path, map_location=map_location)
+    if cls_name == "TorchLogStandardScaler":
+        return TorchLogStandardScaler.load(path, map_location=map_location)
+
+    # fallback: try to construct generic nn.Module and load state
+    # (this covers other custom scalers saved directly with state_dict)
+    init = data.get("init", {})
+    state = data.get("state", data)
+    # try TorchStandardScaler as fallback
+    inst = TorchStandardScaler()
+    inst.load_state_dict(state if isinstance(state, dict) else {})
+    return inst

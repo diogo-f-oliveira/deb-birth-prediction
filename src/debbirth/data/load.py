@@ -42,7 +42,7 @@ def load_data_pytorch(config: TrainDEBBirthNetConfig):
     data = load_splits(dataset_dir=config.data_dir, split_type=config.data_splits)
     # Extract input features and scale
     features, targets = get_features_targets(data=data, data_spec=config.data_spec)
-    scaled_input_data, scalers = scale_data_pytorch(features, scaling_type=config.scaling_type)
+    scaled_input_data, scaler = scale_data_pytorch(features, scaling_type=config.scaling_type)
     # Extract output and convert to tensors
     targets_tensor = {split: convert_to_tensor(df.astype(float)) for split, df in targets.items()}
 
@@ -61,7 +61,7 @@ def load_data_pytorch(config: TrainDEBBirthNetConfig):
             shuffle=True if split == 'train' else False,
         )
 
-    return scaled_input_data, targets_tensor, dataloaders, datasets, scalers
+    return scaled_input_data, targets_tensor, dataloaders, datasets, scaler
 
 def load_data_gp(cfg: TrainGPConfig) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
     """Load splits and return features and targets as numpy arrays for GP training.
