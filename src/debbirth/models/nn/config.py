@@ -42,12 +42,19 @@ class TrainDEBBirthNetConfig:
         # If outdir was not provided, create a timestamped run dir (safe filename) under cwd.
         if self.outdir is None:
             model_name = "DEBBirthNet"
-            run_dir = create_run_outdir(model_name, base=Path.cwd())
+            run_dir = create_run_outdir(model_name)
             object.__setattr__(self, "outdir", run_dir)
         else:
             # Coerce outdir to a Path (accept strings or Paths)
             if not isinstance(self.outdir, Path):
                 object.__setattr__(self, "outdir", Path(self.outdir))
+
+    def save_json(self, path) -> None:
+        """Save this TrainDEBBirthNetConfig to a JSON file (creates parent dirs)."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("w", encoding="utf-8") as f:
+            json.dump(asdict(self), f, indent=2, sort_keys=True, default=str)
 
 
 @dataclass(frozen=True)
@@ -65,7 +72,7 @@ class DEBBirthNetConfig:
             raise ValueError(f"threshold must be between 0 and 1 (exclusive), got {self.threshold}")
 
     def save_json(self, path) -> None:
-        """Save this TrainGPConfig to a JSON file (creates parent dirs)."""
+        """Save this DEBBirthNetConfig to a JSON file (creates parent dirs)."""
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         with p.open("w", encoding="utf-8") as f:
