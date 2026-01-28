@@ -11,10 +11,10 @@ saveFolder = '..\..\..\data\raw';
 % mode: 'fixed' or 'range'
 % scale (only for 'range'): 'log' or 'lin'
 
-spec.g    = struct('mode','range','min',1e-3,'max',1e2,'n',50,'scale','log');
-spec.v_Hb = struct('mode','range','min',1e-10,'max',1e1,'n',100,'scale','log');
-spec.k    = struct('mode','range','min',1e-4,'max',1e1,'n',50,'scale','log');
-spec.f    = struct('mode','range','min',0.1,'max',1,'n',10,'scale','lin');
+spec.g    = struct('mode','range','min',1e-3,'max',1e2,'n',25,'scale','log');
+spec.v_Hb = struct('mode','range','min',1e-6,'max',1e1,'n',40,'scale','log');
+spec.k    = struct('mode','range','min',1e-4,'max',1e1,'n',25,'scale','log');
+spec.f    = struct('mode','range','min',0.5,'max',1,'n',6,'scale','lin');
 
 % Build vectors
 g_vec    = makeVec(spec.g);
@@ -58,7 +58,7 @@ saveResultsTableEvery = 1000;
 maxTime = 0.25; % in minutes
 maxTime = maxTime * 60; % convert to seconds
 
-printProgress = true;
+printProgress = false;
 
 % Output file
 fmtNum = @(x) regexprep(sprintf('%.6g', x), {'\.', '-', '\+'}, {'p','m',''});
