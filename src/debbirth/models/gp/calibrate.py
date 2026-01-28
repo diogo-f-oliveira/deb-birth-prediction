@@ -207,17 +207,17 @@ if __name__ == '__main__':
     data_spec = DatasetSpec(
         feature_set="dimensionless"
     )
-    """
+    #"""
     # Evaluate a single configuration
     cfg = {
         "pop_size": 1000,
         "n_gen": 50,
-        "tourn_frac": .14,
-        "parsi_coef": 2e-5,
-        "p_reprod": .15,
-        "p_mut_total": .14,
-        "u1_subtree": .807094,
-        "u2_hoist": .831898,
+        "tourn_frac": .30,
+        "parsi_coef": 1e-5,
+        "p_reprod": .10,
+        "p_mut_total": .15,
+        "u1_subtree": .6,
+        "u2_hoist": .35,
     }
     output = evaluate_config(config=cfg, data_spec=data_spec, random_state=seed, report_metrics=False,
                                   verbose=True, num_workers=-1, save_run=True)
@@ -254,3 +254,4 @@ if __name__ == '__main__':
     print(best_output["best_program"])
     print("\nTest metrics:")
     print(best_output["test_metrics"])
+    """
