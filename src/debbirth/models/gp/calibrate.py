@@ -222,6 +222,16 @@ if __name__ == '__main__':
     output = evaluate_config(config=cfg, data_spec=data_spec, random_state=seed, report_metrics=False,
                                   verbose=True, num_workers=-1, save_run=True)
     print(output["val_metrics"])
+
+    test_metrics = evaluate_binary_classifier(model=output["model"], X=output['features']['test'],
+                                              y=output['targets']['test'])
+    print("\nTest metrics:")
+    print(test_metrics)
+
+    # Save test metrics in cfg/metrics/test_metrics.json
+    test_metrics_path = output['train_config'].outdir / "metrics" / "test_metrics.json"
+    test_metrics.save_json(test_metrics_path)
+
     """
     # Hyperparameter optimization
     search_space = {

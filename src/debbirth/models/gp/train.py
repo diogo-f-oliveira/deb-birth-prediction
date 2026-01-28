@@ -45,6 +45,7 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, 
 
     return {
         "model": model,
+        "train_config": cfg,
         "val_metrics": val_metrics,
         "features": features,
         "targets": targets,
