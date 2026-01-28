@@ -7,27 +7,26 @@ format long
 %% Define paths to files
 saveFolder = '..\..\..\data\raw';
 
-%% Parameter values and limits
-g_pow_min   = -2;
-g_pow_max   = 2;
+%% Parameter specifications (each can be fixed or ranged)
+% mode: 'fixed' or 'range'
+% scale (only for 'range'): 'log' or 'lin'
 
-vHb_pow_min = -14;
-vHb_pow_max = 1;
+spec.g    = struct('mode','range','min',1e-3,'max',1e2,'n',50,'scale','log');
+spec.v_Hb = struct('mode','range','min',1e-10,'max',1e1,'n',100,'scale','log');
+spec.k    = struct('mode','range','min',1e-4,'max',1e1,'n',50,'scale','log');
+spec.f    = struct('mode','range','min',0.1,'max',1,'n',10,'scale','lin');
 
-% Resolution
-Ng = 300;
-NvHb = 300;
-numPoints = Ng * NvHb;
+% Build vectors
+g_vec    = makeVec(spec.g);
+vHb_vec  = makeVec(spec.v_Hb);
+k_vec    = makeVec(spec.k);
+f_vec    = makeVec(spec.f);
 
-% grid vectors
-g_vec   = logspace(g_pow_min, g_pow_max, Ng);
-vHb_vec = logspace(vHb_pow_min, vHb_pow_max, NvHb);
+% N-D grid (works for any combination of fixed/range)
+% NOTE: ndgrid generalizes meshgrid to N dimensions.
+[G, K, VHB, F] = ndgrid(g_vec, k_vec, vHb_vec, f_vec);
 
-% meshgrid (size: Nv x Ng)
-[G, VHB] = meshgrid(g_vec, vHb_vec);
-
-k = 0.3;
-f = 1;
+numPoints = numel(G);
 
 
 %% Initialize table
@@ -53,27 +52,23 @@ predictionsTable = table( ...
     );
 
 %% Settings
-saveResultsTableEvery = 200;
+saveResultsTableEvery = 1000;
 
 % Max execution time per species
 maxTime = 0.25; % in minutes
 maxTime = maxTime * 60; % convert to seconds
 
-printProgress = false;
-fmtNum = @(x) regexprep(sprintf('%.6g', x), {'\.', '-', '\+'}, {'p','m',''});
+printProgress = true;
 
 % Output file
-fname = sprintf([ ...
-    'grid_' ...
-    'g_1e%s_1e%s_Ng_%d_' ...
-    'vHb_1e%s_1e%s_Nv_%d_' ...
-    'k_%s_' ...
-    'f_%s' ...
-    '.csv'], ...
-    fmtNum(g_pow_min), fmtNum(g_pow_max), Ng, ...
-    fmtNum(vHb_pow_min), fmtNum(vHb_pow_max), NvHb, ...
-    fmtNum(k), fmtNum(f));
+fmtNum = @(x) regexprep(sprintf('%.6g', x), {'\.', '-', '\+'}, {'p','m',''});
+tag = @(s) makeTag(s, fmtNum);
+
+fname = sprintf('grid_g_%s_k_%s_vHb_%s_f_%s.csv', ...
+    tag(spec.g), tag(spec.k), tag(spec.v_Hb), tag(spec.f));
+
 outputFileName = [saveFolder '\' fname];
+
 
 
 %% Set up parallel pool
@@ -91,18 +86,22 @@ inProgressFutures = struct('future', {}, 'i', {}, 'speciesName', {}, 'startTime'
 while i <= numPoints || ~isempty(inProgressFutures)
     % Submit new tasks if workers are available
     while length(inProgressFutures) < numWorkers && i <= numPoints
+        
         % Get parameters
-        g = G(i);
+        g    = G(i);
+        k    = K(i);
         v_Hb = VHB(i);
+        f    = F(i);
 
         % Store parameters
-        predictionsTable{i, 'g'} = g;
+        predictionsTable{i, 'g'}    = g;
+        predictionsTable{i, 'k'}    = k;
         predictionsTable{i, 'v_Hb'} = v_Hb;
-        predictionsTable{i, 'k'} = k;
-        predictionsTable{i, 'f'} = f;
-
+        predictionsTable{i, 'f'}    = f;
+        
         % Submit parfeval task
         fut = parfeval(pool, @runBirthSimulation, 2, g, k, v_Hb, f);
+
         % Record the future start time
         startTime = tic;
         nFutures = length(inProgressFutures);
@@ -190,7 +189,7 @@ end
 writetable(predictionsTable, outputFileName,'WriteRowNames',true);
 fprintf('Table saved in %s\n', outputFileName);
 
-%% Function to process each species
+%% Helper functions
 function [outputs, success] = runBirthSimulation(g, k, v_Hb, f)
 outputs = struct( ...
     'lb', NaN, ...
@@ -205,7 +204,7 @@ success = false;
 pars_lb = [g, k, v_Hb];
 
 % Compute length at birth
-[lb, info] = get_lb(pars_lb, f);
+[lb, info] = get_lb2(pars_lb, f);
 if ~info; return; end
 outputs.lb = lb;
 outputs.lb_f = lb < f;
@@ -219,4 +218,43 @@ outputs.tb = tb;
 success = true;
 
 end
+
+function vec = makeVec(s)
+    switch lower(s.mode)
+        case 'fixed'
+            vec = s.value;
+
+        case 'range'
+            if ~isfield(s,'scale'), s.scale = 'lin'; end
+            if s.n <= 1
+                vec = s.min;  % degenerate range -> single point
+                return
+            end
+
+            switch lower(s.scale)
+                case 'log'
+                    vec = logspace(log10(s.min), log10(s.max), s.n);
+                case 'lin'
+                    vec = linspace(s.min, s.max, s.n);
+                otherwise
+                    error("Unknown scale '%s'. Use 'log' or 'lin'.", s.scale);
+            end
+
+        otherwise
+            error("Unknown mode '%s'. Use 'fixed' or 'range'.", s.mode);
+    end
+end
+
+function t = makeTag(s, fmtNum)
+    switch lower(s.mode)
+        case 'fixed'
+            t = ['fixed_' fmtNum(s.value)];
+        case 'range'
+            if ~isfield(s,'scale'), s.scale = 'lin'; end
+            t = sprintf('%s_%s_%s_N%d', lower(s.scale), fmtNum(s.min), fmtNum(s.max), s.n);
+        otherwise
+            error("Unknown mode '%s'.", s.mode);
+    end
+end
+
 
