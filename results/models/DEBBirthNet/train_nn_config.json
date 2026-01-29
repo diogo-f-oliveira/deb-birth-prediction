@@ -20,8 +20,8 @@
     "threshold": 0.5
   },
   "num_workers": 4,
-  "outdir": "results\\runs\\2026-01-27T19-54-14_DEBBirthNet",
-  "pos_weight": 0.11595930904150009,
+  "outdir": "results\\runs\\2026-01-29T11-58-29_DEBBirthNet",
+  "pos_weight": 1.325378656387329,
   "scaling_type": "log_standardize",
   "seed": 42,
   "use_pos_weight": true,
