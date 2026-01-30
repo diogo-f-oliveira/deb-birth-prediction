@@ -63,7 +63,7 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
     p_subtree_mutation *= p_mut_total
 
     # Get function set
-    func_set_option = config.get("function_set", "default")
+    func_set_option = config.get("func_set")
     if func_set_option == "arithmetic":
         function_set = ARITHMETIC_FUNCTION_SET
     elif func_set_option == "default":
@@ -73,7 +73,7 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
     else:
         raise ValueError(f"Unknown function_set option: {func_set_option}")
     # Get constants set
-    const_set_option = config.get("constants_set", "default")
+    const_set_option = config.get("const_set")
     if const_set_option == "default":
         const_set = DEFAULT_CONSTANT_SET
     elif const_set_option == "none":
@@ -207,10 +207,10 @@ if __name__ == '__main__':
     data_spec = DatasetSpec(
         feature_set="dimensionless"
     )
-    #"""
+    """
     # Evaluate a single configuration
     cfg = {
-        "pop_size": 1000,
+        "pop_size": 500,
         "n_gen": 50,
         "tourn_frac": .30,
         "parsi_coef": 1e-5,
@@ -238,7 +238,7 @@ if __name__ == '__main__':
         "pop_size": 1000,
         "n_gen": 50,
         "tourn_frac": tune.quniform(0.05, 0.5, 0.01),
-        "parsi_coef": tune.qloguniform(1e-5, 1e-2, 1e-5),
+        "parsi_coef": tune.qloguniform(1e-5, 1e-3, 1e-5),
         "p_reprod": tune.quniform(0.0, 0.4, 0.01),
         "p_mut_total": tune.quniform(0.0, 0.4, 0.01),
         "u1_subtree": tune.uniform(0.0, 1.0),
@@ -249,7 +249,7 @@ if __name__ == '__main__':
     best_output = hyperopt_calibration(
         search_space=search_space,
         data_spec=data_spec,
-        num_samples=150,
+        num_samples=100,
         metric='f1_macro',
         mode='max',
         # run_name='GPSC_Hyperopt_Test',
@@ -264,4 +264,4 @@ if __name__ == '__main__':
     print(best_output["best_program"])
     print("\nTest metrics:")
     print(best_output["test_metrics"])
-    """
+    #"""
