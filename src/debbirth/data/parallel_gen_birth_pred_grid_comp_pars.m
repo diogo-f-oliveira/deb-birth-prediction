@@ -11,10 +11,13 @@ saveFolder = '..\..\..\data\raw';
 % mode: 'fixed' or 'range'
 % scale (only for 'range'): 'log' or 'lin'
 
-spec.g    = struct('mode','range','min',1e-3,'max',1e2,'n',25,'scale','log');
-spec.v_Hb = struct('mode','range','min',1e-6,'max',1e1,'n',40,'scale','log');
-spec.k    = struct('mode','range','min',1e-4,'max',1e1,'n',25,'scale','log');
-spec.f    = struct('mode','range','min',0.5,'max',1,'n',6,'scale','lin');
+spec.g    = struct('mode','range','min',1e-3,'max',1e2,'n',300,'scale','log');
+spec.v_Hb = struct('mode','range','min',1e-6,'max',1e1,'n',300,'scale','log');
+% spec.k    = struct('mode','range','min',1e-4,'max',1e1,'n',25,'scale','log');
+spec.k    = struct('mode','fixed','value',0.3);
+% spec.f    = struct('mode','range','min',0.5,'max',1,'n',6,'scale','lin');
+spec.f    = struct('mode','fixed','value',1);
+
 
 % Build vectors
 g_vec    = makeVec(spec.g);
