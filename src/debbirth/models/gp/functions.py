@@ -88,6 +88,37 @@ def _plog(x: np.ndarray) -> np.ndarray:
 
 PLOG = make_function(function=_plog, name="plog", arity=1, wrap=True)
 
+def _beta_43_0(x: np.ndarray) -> np.ndarray:
+    """
+    Protected version of the DEB-book special case B_x(4/3, 0):
+        B_x(4/3, 0) = ∫_0^x t^(1/3) / (1 - t) dt
+
+    Closed form via substitution u = x^(1/3):
+        = -3u - ln(1-u) + 0.5 ln(u^2+u+1)
+          + sqrt(3) * arctan((2u+1)/sqrt(3)) - pi/(2*sqrt(3))
+
+    Protection: clip x to [eps, 1-eps] to avoid singularity at x=1.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    x = np.clip(x, EPS, 1.0 - EPS)
+
+    u = np.cbrt(x)  # u = x^(1/3), stable for arrays
+    q = u*u + u + 1.0
+
+    sqrt3 = np.sqrt(3.0)
+    out = (
+        -3.0 * u
+        - np.log1p(-u)                      # -ln(1-u)
+        + 0.5 * np.log(q)                   # +0.5 ln(u^2+u+1)
+        + sqrt3 * np.arctan((2.0*u + 1.0) / sqrt3)
+        - (np.pi / (2.0 * sqrt3))
+    )
+
+    # Extra safety: replace any non-finite values (shouldn't occur with clipping)
+    out = np.where(np.isfinite(out), out, 0.0)
+    return out
+
+BETA_43_0 = make_function(function=_beta_43_0, name="beta43_0", arity=1)
 
 # Type aliases
 GPFunction = Union[str, Callable[..., Any]]
@@ -113,6 +144,8 @@ DEFAULT_FUNCTION_SET: GPFunctionSet = (
     PLOG,
     PINV,
     "neg",
+    "min",
+    "max",
 )
 
 # EXTENDED now builds on DEFAULT_FUNCTION_SET (inherits protected primitives)
