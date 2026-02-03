@@ -20,5 +20,25 @@ def create_run_outdir(model_name: str, base: Union[str, Path] = "results/runs") 
     """
     base_path = Path(base) if base else Path.cwd()
     timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    run_dir = base_path /  f"{timestamp}_{model_name}"
+    run_dir = base_path / f"{timestamp}_{model_name}"
     return ensure_outdir(run_dir)
+
+
+def save_figure_in_formats(
+        fig,
+        outdir: Union[str, Path],
+        filename: str,
+        formats: list[str] = ("png", "pdf"),
+        dpi: int = 300,
+) -> None:
+    """Save a matplotlib figure in multiple formats.
+
+    Args:
+        fig: matplotlib Figure object.
+        outpath: base path (without extension) to save the figure.
+        formats: list of formats (extensions) to save, e.g. ["png", "pdf"].
+        dpi: resolution in dots per inch for raster formats (default 300).
+    """
+    outpath = Path(outdir) / filename
+    for fmt in formats:
+        fig.savefig(outpath.with_suffix(f".{fmt}"), dpi=dpi)
