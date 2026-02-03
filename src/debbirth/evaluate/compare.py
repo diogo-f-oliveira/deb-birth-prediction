@@ -66,49 +66,76 @@ def format_metrics_latex_table(
 def format_per_class_metrics_latex_table(
     results_df: pd.DataFrame,
     num_format: str = "{:.4f}",
+    extra_metrics: Optional[List[str]] = None,
 ) -> str:
     """
-    Render a LaTeX tabular with two header lines:
-      - First line: "Model" then multicolumn groups "Birth is reached" (positive) and
-        "Birth is not reached" (negative).
-      - Second line: metric names (Precision, Recall, F1-score) taken from METRIC_LABELS.
-    Expects the dataframe to contain these columns:
-      precision_pos, recall_pos, f1_pos, precision_neg, recall_neg, f1_neg
-    Rows are printed for each dataframe index (model name).
+    Render a LaTeX tabular where each row is a model.
+    - Column order: precision_pos, recall_pos, f1_pos, precision_neg, recall_neg, f1_neg,
+      then for each extra metric: {name} (single-valued column).
+    - extra_metrics: list of metric names; for each name the function expects a single column
+      with that exact name in results_df (no _pos/_neg suffix).
+    Header layout:
+      First header row: \multirow{2}{*}{Model} | \multicolumn{3}{c}{Birth is reached} | \multicolumn{3}{c}{Birth is not reached} | \multirow{2}{*}{Extra1} ...
+      Second header row: empty | Precision | Recall | F1 | Precision | Recall | F1 | (empty cells for extras)
+    Returns a tabular string (uses METRIC_LABELS for column headers).
     """
     df = results_df.copy()
+    if extra_metrics is None:
+        extra_metrics = []
 
-    pos_metrics = ["precision_pos", "recall_pos", "f1_pos"]
-    neg_metrics = ["precision_neg", "recall_neg", "f1_neg"]
-    required = pos_metrics + neg_metrics
-    missing = [c for c in required if c not in df.columns]
+    # desired order: pos metrics grouped, then neg metrics grouped
+    base_cols = [
+        "precision_pos", "recall_pos", "f1_pos",
+        "precision_neg", "recall_neg", "f1_neg",
+    ]
+
+    ordered_cols = base_cols + list(extra_metrics)
+
+    # validate columns exist
+    missing = [c for c in ordered_cols if c not in df.columns]
     if missing:
-        raise ValueError(f"DataFrame is missing required per-class columns: {missing}")
+        raise ValueError(f"DataFrame is missing required columns: {sorted(set(missing))}")
+
+    # alignment: one 'l' for Model, then one 'r' per data column
+    num_data_cols = len(ordered_cols)
+    align = rf"l{('r' * num_data_cols)}"
 
     lines = []
-    # alignment: model column + 6 numeric columns
-    lines.append(r"\begin{tabular}{lrrrrrr}")
+    lines.append(rf"\begin{{tabular}}{{{align}}}")
     lines.append(r"\toprule")
 
-    # First header row: group titles
-    lines.append(
-        "Model & "
-        r"\multicolumn{3}{c}{Birth is reached} & "
-        r"\multicolumn{3}{c}{Birth is not reached} \\"
-    )
-    lines.append(r"\cmidrule(lr){2-4} \cmidrule(lr){5-7}")
-
-    # Second header row: metric labels from METRIC_LABELS
-    header_metrics = [METRIC_LABELS.get(c, c) for c in pos_metrics + neg_metrics]
-    lines.append(" & ".join([""] + header_metrics) + r" \\")
+    # First header row: Model multirow + two multicolumn groups + multirow extras
+    first_header = []
+    first_header.append(r"\multirow{2}{*}{Model}")
+    first_header.append(r"\multicolumn{3}{c}{Birth is reached}")
+    first_header.append(r"\multicolumn{3}{c}{Birth is not reached}")
+    for name in extra_metrics:
+        label = METRIC_LABELS.get(name, name)
+        # ensure proper TeX escaping is left to the caller if needed
+        first_header.append(r"\multirow{2}{*}{" + str(label) + "}")
+    lines.append(" & ".join(first_header) + r" \\")
+    # Second header row: empty for multirow Model, then metric labels, then empty for each extra metric
+    second_header = []
+    second_header.append("")  # placeholder for the multirow Model cell
+    # metric labels (use generic metric names)
+    second_header.extend([
+        METRIC_LABELS.get("precision", "Precision"),
+        METRIC_LABELS.get("recall", "Recall"),
+        METRIC_LABELS.get("f1", "F1-score"),
+        METRIC_LABELS.get("precision", "Precision"),
+        METRIC_LABELS.get("recall", "Recall"),
+        METRIC_LABELS.get("f1", "F1-score"),
+    ])
+    # placeholders for extras (their header is in the multirow above)
+    second_header.extend([""] * len(extra_metrics))
+    lines.append(" & ".join(second_header) + r" \\")
     lines.append(r"\midrule")
 
-    # Body: print rows in grouped order (pos then neg)
-    ordered_cols = pos_metrics + neg_metrics
+    # body rows: one row per model, values in ordered_cols
     for idx, row in df.iterrows():
         cells = [str(idx)]
         for col in ordered_cols:
-            v = row.get(col, None)
+            v = row[col]
             if pd.isna(v):
                 rendered = ""
             else:
