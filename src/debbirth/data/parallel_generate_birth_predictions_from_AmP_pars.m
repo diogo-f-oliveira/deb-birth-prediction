@@ -43,8 +43,8 @@ predictionsTable = table( ...
 
 %% Settings
 seed = 42;
-noiseLevel = 0.25; 
-kapNoiseLevel = 10;
+noiseLevel = 1; 
+kapNoiseLevel = 2;
 saveResultsTableEvery = 200;
 
 % Max execution time per species
@@ -233,8 +233,11 @@ if isfolder(speciesFolder)
         par.p_M = addMultiplicativeNoise(par.p_M, noiseLevel);
         par.E_Hb = addMultiplicativeNoise(par.E_Hb, noiseLevel);
         par.k_J = addMultiplicativeNoise(par.k_J, noiseLevel);
-        % Add variation to kap
-        par.kap = betarnd(par.kap*kapNoiseLevel, (1-par.kap)*kapNoiseLevel);
+        % Add variation to kap (ensure it remains in (0,1))
+        par.kap = -1;
+        while par.kap <= 0 || par.kap >= 1
+            par.kap = betarnd(par.kap*kapNoiseLevel, (1-par.kap)*kapNoiseLevel);
+        end
         % Compute compound parameters
         cPar = parscomp_st(par);
         kvHb = cPar.k * cPar.v_Hb;
