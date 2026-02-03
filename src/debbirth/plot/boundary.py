@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+from matplotlib.colors import ListedColormap, BoundaryNorm
+from matplotlib.patches import Patch
 
 LABEL_TO_LATEX = {
     'g': r'g',
@@ -21,8 +23,10 @@ def plot_decision_mesh(
         logx: bool = True,
         logy: bool = True,
         shading: str = "auto",
-        legend_loc: str = "lower right",
-        bound_linewidth: float = 1.5,
+        legend_loc: str = "lower left",
+        bound_linewidth: float = 1,
+        neg_color: str = "#E0F3F8",
+        pos_color: str = "#FEE8C8",
 ):
     """
     Plot a decision map on a meshgrid using columns x_col (x-axis), y_col (y-axis)
@@ -30,6 +34,8 @@ def plot_decision_mesh(
 
     Draw horizontal lines at f**3 / k and f**k using f and k taken from df.iloc[0].
     Returns (fig, ax).
+      neg_color, pos_color: colors used for negative (<=0.5) and positive (>0.5)
+      mesh cells respectively. Accepts any Matplotlib color spec.
     """
 
     # build sorted unique axis values
@@ -43,14 +49,21 @@ def plot_decision_mesh(
         .to_numpy()
     )
 
+    # mask invalid cells so they are not colored
+    Zm = np.ma.masked_invalid(Z)
+
     # coordinate arrays for plotting
     X_grid, Y_grid = np.meshgrid(x_vals, y_vals)
 
     # create axis
     fig, ax = plt.subplots(figsize=(6, 5), tight_layout=True)
 
+    # create a 2-color colormap (neg_color for <=0.5, pos_color for >0.5)
+    cmap = ListedColormap([neg_color, pos_color])
+    norm = BoundaryNorm([-np.inf, 0.5, np.inf], cmap.N)
+
     # use provided colormap for the mesh so model lines stand out
-    pcm = ax.pcolormesh(X_grid, Y_grid, Z, shading=shading, alpha=0.9)
+    pcm = ax.pcolormesh(X_grid, Y_grid, Zm, shading=shading, cmap=cmap, norm=norm, alpha=0.9)
     if logx:
         ax.set_xscale("log")
     if logy:
@@ -61,26 +74,46 @@ def plot_decision_mesh(
     k = float(df.iloc[0]["k"])
 
     # Label axes and add horizontal lines
-    ax.set_xlabel(LABEL_TO_LATEX[x_col])
-    ax.set_ylabel(LABEL_TO_LATEX[y_col])
-    ax.set_title(f"Birth feasibility regions (${LABEL_TO_LATEX['k']}={k:.1f}$, ${LABEL_TO_LATEX['f']}={f:.1f}$)")
+    ax.set_xlabel(f"${LABEL_TO_LATEX[x_col]}$", fontsize=12)
+    ax.set_ylabel(f"${LABEL_TO_LATEX[y_col]}$", fontsize=12)
+    ax.set_title(f"${LABEL_TO_LATEX['k']}={k:.1f}$, ${LABEL_TO_LATEX['f']}={f:.1f}$")
 
     # Get first two colors from Set2 colormap for horizontal lines
-    green = plt.get_cmap("Set2").colors[0]
-    red = plt.get_cmap("Set2").colors[1]
-    ax.axhline(y=f ** 3 / k , color=green, linestyle="--",
-               linewidth=1, label=rf"$v_H^b = f^3/k^3$", zorder=3)
-    if k > 1:
-        ax.axhline(y=(f / k) ** 3, color=red, linestyle="--",
-                   linewidth=bound_linewidth, label=rf"$v_H^b = f^3/k^3$", zorder=3)
-    if k < 1:
-        ax.axhline(y=f ** 3, color=red, linestyle="--",
+    if k == 1:
+        ax.axhline(y=f ** 3 / k, color="#4D4D4D", linestyle="--",
                    linewidth=bound_linewidth, label=rf"$v_H^b = f^3$", zorder=3)
-    ax.legend(loc=legend_loc)
+    else:
+        ax.axhline(y=f ** 3 / k, color="#4D4D4D", linestyle="--",
+                   linewidth=bound_linewidth, label=rf"$v_H^b = f^3/k$", zorder=3)
+        if k > 1:
+            ax.axhline(y=(f / k) ** 3, color="#8C8C8C", linestyle="-.",
+                       linewidth=bound_linewidth, label=rf"$v_H^b = f^3/k^3$", zorder=3)
+        if k < 1:
+            ax.axhline(y=f ** 3, color="#8C8C8C", linestyle="-.",
+                       linewidth=bound_linewidth, label=rf"$v_H^b = f^3$", zorder=3)
+
+    # create legend entries for the decision regions using the provided colors
+    pos_patch = Patch(facecolor=pos_color, edgecolor="none", label="Birth is reached")
+    neg_patch = Patch(facecolor=neg_color, edgecolor="none", label="Birth is not reached")
+
+    # collect existing handles/labels (from the horizontal lines) and prepend the region patches
+    base_handles, base_labels = ax.get_legend_handles_labels()
+    region_handles = [pos_patch, neg_patch]
+    region_labels = [h.get_label() for h in region_handles]
+    all_handles = region_handles + base_handles
+    all_labels = region_labels + base_labels
+    if all_handles:
+        ax.legend(all_handles, all_labels, loc=legend_loc)
+
+    # expose region legend entries to callers so higher-level functions can include them
+    ax._region_legend_handles = region_handles
+    ax._region_legend_labels = region_labels
 
     return fig, ax
 
+
 MODEL_COLORS = [plt.get_cmap("tab10").colors[i] for i in range(10)]  # first 10 colors from 'tab' cmap
+
 
 def plot_decision_mesh_with_models(
         df: pd.DataFrame,
@@ -92,12 +125,15 @@ def plot_decision_mesh_with_models(
         logy: bool = True,
         shading: str = "auto",
         contour_level: float = 0.5,
-        linewidth: float = 2.5,         # thicker model lines
+        linewidth: float = 1.5,  # thicker model lines
         linestyle: str = "-",
-        legend_loc: str = "lower right",
+        legend_loc: str = "lower left",
         model_labels=None,
         model_colors: List[str] = None,
         model_zorder: int = 4,
+        model_alpha: float = 0.9,
+        neg_color: str = "#E0F3F8",
+        pos_color: str = "#FEE8C8",
 ):
     """
     Draw the base decision mesh (via plot_decision_mesh) and overlay model decision
@@ -122,9 +158,19 @@ def plot_decision_mesh_with_models(
     else:
         labels = [str(c) for c in model_cols]
 
-    # draw base mesh using the same x_col/y_col; pass the mesh cmap through
-    fig, ax = plot_decision_mesh(df, decision_col=decision_col, x_col=x_col, y_col=y_col,
-                                 logx=logx, logy=logy, shading=shading, legend_loc=legend_loc)
+    # draw base mesh using the same x_col/y_col; pass the mesh colors through
+    fig, ax = plot_decision_mesh(
+        df,
+        decision_col=decision_col,
+        x_col=x_col,
+        y_col=y_col,
+        logx=logx,
+        logy=logy,
+        shading=shading,
+        legend_loc=legend_loc,
+        neg_color=neg_color,
+        pos_color=pos_color,
+    )
 
     # build sorted unique axis values (must match the mesh used by plot_decision_mesh)
     x_vals = np.sort(df[x_col].unique())
@@ -159,7 +205,7 @@ def plot_decision_mesh_with_models(
                 linewidths=linewidth,
                 linestyles=linestyle,
                 zorder=model_zorder,
-                alpha=0.7,
+                alpha=model_alpha,
             )
             # create an explicit Line2D handle matching the contour appearance
             handle = Line2D([0], [0], color=model_colors[i], linewidth=linewidth, linestyle=linestyle)
@@ -169,10 +215,15 @@ def plot_decision_mesh_with_models(
             # skip contours that can't be computed (e.g., constant Z or fully masked)
             continue
 
-    # recreate legend: include existing handles (mesh/hlines) and explicit model handles
+    # recreate legend: include region patches (if present), existing handles (hlines), and explicit model handles
     base_handles, base_labels = ax.get_legend_handles_labels()
-    all_handles = list(base_handles) + model_handles
-    all_labels = list(base_labels) + model_labels_used
+
+    # get region handles/labels exposed by plot_decision_mesh (if available)
+    region_handles = getattr(ax, "_region_legend_handles", [])
+    region_labels = getattr(ax, "_region_legend_labels", [])
+
+    all_handles = list(region_handles) + list(base_handles) + model_handles
+    all_labels = list(region_labels) + list(base_labels) + model_labels_used
     if all_handles:
         ax.legend(all_handles, all_labels, loc=legend_loc)
 
