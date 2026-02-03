@@ -12,7 +12,7 @@ saveFolder = '..\..\..\data\raw';
 % scale (only for 'range'): 'log' or 'lin'
 
 spec.g    = struct('mode','range','min',1e-3,'max',1e2,'n',300,'scale','log');
-spec.v_Hb = struct('mode','range','min',1e-6,'max',1e1,'n',300,'scale','log');
+spec.v_Hb = struct('mode','range','min',1e-14,'max',1e1,'n',300,'scale','log');
 % spec.k    = struct('mode','range','min',1e-4,'max',1e1,'n',25,'scale','log');
 spec.k    = struct('mode','fixed','value',0.3);
 % spec.f    = struct('mode','range','min',0.5,'max',1,'n',6,'scale','lin');
@@ -60,6 +60,7 @@ saveResultsTableEvery = 1000;
 % Max execution time per species
 maxTime = 0.25; % in minutes
 maxTime = maxTime * 60; % convert to seconds
+useget_lb = false;
 
 printProgress = false;
 
@@ -67,9 +68,13 @@ printProgress = false;
 fmtNum = @(x) regexprep(sprintf('%.6g', x), {'\.', '-', '\+'}, {'p','m',''});
 tag = @(s) makeTag(s, fmtNum);
 
-fname = sprintf('grid_g_%s_k_%s_vHb_%s_f_%s.csv', ...
+fname = sprintf('grid_g_%s_k_%s_vHb_%s_f_%s', ...
     tag(spec.g), tag(spec.k), tag(spec.v_Hb), tag(spec.f));
-
+if useget_lb
+    fname = [fname '_get_lb.csv'];
+else
+    fname = [fname '_get_lb2.csv'];
+end
 outputFileName = [saveFolder '\' fname];
 
 
@@ -103,7 +108,7 @@ while i <= numPoints || ~isempty(inProgressFutures)
         predictionsTable{i, 'f'}    = f;
         
         % Submit parfeval task
-        fut = parfeval(pool, @runBirthSimulation, 2, g, k, v_Hb, f);
+        fut = parfeval(pool, @runBirthSimulation, 2, g, k, v_Hb, f, useget_lb);
 
         % Record the future start time
         startTime = tic;
@@ -193,7 +198,7 @@ writetable(predictionsTable, outputFileName,'WriteRowNames',true);
 fprintf('Table saved in %s\n', outputFileName);
 
 %% Helper functions
-function [outputs, success] = runBirthSimulation(g, k, v_Hb, f)
+function [outputs, success] = runBirthSimulation(g, k, v_Hb, f, useget_lb)
 outputs = struct( ...
     'lb', NaN, ...
     'tb', NaN, ...
@@ -207,7 +212,11 @@ success = false;
 pars_lb = [g, k, v_Hb];
 
 % Compute length at birth
-[lb, info] = get_lb2(pars_lb, f);
+if useget_lb
+    [lb, info] = get_lb(pars_lb, f);
+else
+    [lb, info] = get_lb2(pars_lb, f);
+end
 if ~info; return; end
 outputs.lb = lb;
 outputs.lb_f = lb < f;
