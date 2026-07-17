@@ -30,15 +30,25 @@ def save_figure_in_formats(
         filename: str,
         formats: list[str] = ("png", "pdf"),
         dpi: int = 300,
+        verbose: bool = True,
 ) -> None:
     """Save a matplotlib figure in multiple formats.
 
     Args:
         fig: matplotlib Figure object.
-        outpath: base path (without extension) to save the figure.
-        formats: list of formats (extensions) to save, e.g. ["png", "pdf"].
+        outdir: directory or Path where files will be saved.
+        filename: base filename (without extension).
+        formats: list/tuple of formats (extensions) to save, e.g. ("png", "pdf").
         dpi: resolution in dots per inch for raster formats (default 300).
+        verbose: if True, print the path of each saved file after saving.
     """
     outpath = Path(outdir) / filename
     for fmt in formats:
-        fig.savefig(outpath.with_suffix(f".{fmt}"), dpi=dpi)
+        saved_path = outpath.with_suffix(f".{fmt}")
+        fig.savefig(saved_path, dpi=dpi)
+        if verbose:
+            try:
+                print(f"Saved figure: {saved_path.resolve()}")
+            except Exception:
+                # fallback to printing the relative path if resolve() fails
+                print(f"Saved figure: {saved_path}")

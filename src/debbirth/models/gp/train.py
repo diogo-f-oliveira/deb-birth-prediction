@@ -212,17 +212,18 @@ if __name__ == "__main__":
     data_spec = DatasetSpec(
         feature_set="dimensionless"
     )
+    zero = GPConstant(name="c0", value=0.0)
     gp_cfg = GPConfig(
-        generations=50,
+        generations=100,
         population_size=1000,
-        tournament_size=140,
-        p_crossover=0.70,
-        p_hoist_mutation=0.05,
-        p_point_mutation=0.01,
-        p_subtree_mutation=0.09,
-        parsimony_coefficient=6e-5,
+        tournament_size=190,
+        p_crossover=0.67,
+        p_hoist_mutation=0.005,
+        p_point_mutation=0.02,
+        p_subtree_mutation=0.085,
+        parsimony_coefficient=3e-4,
         function_set=EXTENDED_FUNCTION_SET,
-        constants=EXTENDED_CONSTANT_SET,
+        constants=EXTENDED_CONSTANT_SET + (zero,),
         init_depth=(6, 10),
     )
     cfg = TrainGPConfig(
@@ -232,7 +233,7 @@ if __name__ == "__main__":
         verbose=1,
         class_weights="balanced",
         seed=42,
-        num_workers=-1,
+        num_workers=12,
     )
     print(cfg)
     print()
