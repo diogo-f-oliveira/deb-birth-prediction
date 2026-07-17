@@ -112,6 +112,62 @@ def plot_decision_mesh(
     return fig, ax
 
 
+def draw_boundary(
+        df: pd.DataFrame,
+        x_col: str,
+        y_col: str,
+        values_col: str,
+        contour_level: float = 0.5,
+        ax: plt.Axes = None,
+        color: str = "k",
+        linewidth: float = 1.5,
+        linestyle: str = "-",
+        zorder: int = 4,
+        alpha: float = 0.9,
+):
+    """
+    Draw a single decision boundary (contour at `contour_level`) for values_col on
+    the grid defined by x_col and y_col present in df.
+
+    Required args: df, x_col, y_col, values_col.
+    Optional styling args: color, linewidth, linestyle, zorder, alpha.
+
+    Returns (contour_set, line_handle) or (None, None) if contour could not be computed.
+    """
+    # build sorted unique axis values
+    x_vals = np.sort(df[x_col].unique())
+    y_vals = np.sort(df[y_col].unique())
+
+    # pivot values into grid shape and reindex to ensure ordering matches mesh
+    Z = (
+        df.pivot(index=y_col, columns=x_col, values=values_col)
+        .reindex(index=y_vals, columns=x_vals)
+        .to_numpy()
+    )
+    Zm = np.ma.masked_invalid(Z)
+    X_grid, Y_grid = np.meshgrid(x_vals, y_vals)
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    try:
+        cs = ax.contour(
+            X_grid,
+            Y_grid,
+            Zm,
+            levels=[contour_level],
+            colors=[color],
+            linewidths=linewidth,
+            linestyles=linestyle,
+            zorder=zorder,
+            alpha=alpha,
+        )
+        handle = Line2D([0], [0], color=color, linewidth=linewidth, linestyle=linestyle, alpha=alpha)
+        return cs, handle
+    except Exception:
+        # return None on any contour failure (constant data, fully masked, etc.)
+        return None, None
+
+
 MODEL_COLORS = [plt.get_cmap("tab10").colors[i] for i in range(10)]  # first 10 colors from 'tab' cmap
 
 
@@ -172,7 +228,7 @@ def plot_decision_mesh_with_models(
         pos_color=pos_color,
     )
 
-    # build sorted unique axis values (must match the mesh used by plot_decision_mesh)
+    # (keep grid computation if callers expect it elsewhere)
     x_vals = np.sort(df[x_col].unique())
     y_vals = np.sort(df[y_col].unique())
     X_grid, Y_grid = np.meshgrid(x_vals, y_vals)
@@ -185,35 +241,24 @@ def plot_decision_mesh_with_models(
     model_handles = []
     model_labels_used = []
 
-    # overlay each model's decision boundary
+    # overlay each model's decision boundary using the shared helper
     for i, col in enumerate(model_cols):
-        # pivot model predictions to grid shape; reindex to ensure same ordering
-        Z = (
-            df.pivot(index=y_col, columns=x_col, values=col)
-            .reindex(index=y_vals, columns=x_vals)
-            .to_numpy()
+        cs, handle = draw_boundary(
+            df=df,
+            x_col=x_col,
+            y_col=y_col,
+            values_col=col,
+            contour_level=contour_level,
+            ax=ax,
+            color=model_colors[i],
+            linewidth=linewidth,
+            linestyle=linestyle,
+            zorder=model_zorder,
+            alpha=model_alpha,
         )
-        # mask invalid cells so contouring skips them
-        Zm = np.ma.masked_invalid(Z)
-
-        # contour at the given decision level
-        try:
-            cs = ax.contour(
-                X_grid, Y_grid, Zm,
-                levels=[contour_level],
-                colors=[model_colors[i]],
-                linewidths=linewidth,
-                linestyles=linestyle,
-                zorder=model_zorder,
-                alpha=model_alpha,
-            )
-            # create an explicit Line2D handle matching the contour appearance
-            handle = Line2D([0], [0], color=model_colors[i], linewidth=linewidth, linestyle=linestyle)
+        if handle is not None:
             model_handles.append(handle)
             model_labels_used.append(labels[i])
-        except Exception:
-            # skip contours that can't be computed (e.g., constant Z or fully masked)
-            continue
 
     # recreate legend: include region patches (if present), existing handles (hlines), and explicit model handles
     base_handles, base_labels = ax.get_legend_handles_labels()
