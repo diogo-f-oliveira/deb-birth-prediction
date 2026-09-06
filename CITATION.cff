@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "Will it be born? Code and data"
+type: software
+version: 1.0.0
+date-released: 2026-09-05
+
+authors:
+  - family-names: Oliveira
+    given-names: Diogo F.
+  - family-names: Martins
+    given-names: Miguel S. E.
+  - family-names: Marques
+    given-names: Gonçalo M.
+  - family-names: Domingos
+    given-names: Tiago
+  - family-names: Vieira
+    given-names: Susana M.
+  - family-names: Sousa
+    given-names: João M. C.
