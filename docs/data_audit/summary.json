@@ -1,0 +1,404 @@
+{
+  "python": "3.14.7",
+  "audit_script_sha256": "5a33ba98a43917808490b29d300eb9a5081880137c9d3a122cb4e30afcbfd767",
+  "versions": {
+    "numpy": "2.5.2",
+    "pandas": "3.0.5",
+    "scipy": "1.18.1",
+    "matplotlib": "3.11.1"
+  },
+  "source_files": {
+    "train": {
+      "path": "data\\processed\\train.csv",
+      "sha256": "da926b68c21ad0d18758409c2ed2fc9cd2f31e7063dd69861905c61628b3396f",
+      "rows": 159991
+    },
+    "val": {
+      "path": "data\\processed\\val.csv",
+      "sha256": "7619cb56c1ad8d8407c4ac5886c2f05949e5310eb34282e328a3539c4e75c3f2",
+      "rows": 19999
+    },
+    "test": {
+      "path": "data\\processed\\test.csv",
+      "sha256": "e25fdeea26e96d6ef2edbd2b349ca7b5078b77dcb85d701f056d110a370b10af",
+      "rows": 19999
+    },
+    "processed": {
+      "path": "data\\processed\\deb_reach_birth.csv",
+      "sha256": "903a7acab88ba7dcf29359e74bc5e38220319bd9b44b16f15eed65fb02d82cae",
+      "rows": 199989
+    },
+    "raw": {
+      "path": "data\\raw\\sample4D_lhs_N_200000_g_1em3_1e2_k_m4_1_f_0p1_1_ddec_1_getlb2.csv",
+      "sha256": "5cd2e446c97667136e52ed61f563b04f7b9def138d2d4c00dd66d6d425e9d3c1",
+      "rows": 200000
+    }
+  },
+  "raw_excluded_rows": 11,
+  "raw_nonpositive_execution_time": 11,
+  "raw_invalid_parameter_rows": 1,
+  "processed_to_raw": {
+    "matched_rows": 199989,
+    "unique_target_rows": 199989,
+    "max_log_coordinate_distance": 9.78772618509538e-13,
+    "log_coordinate_tolerance": 1e-10,
+    "boolean_mismatches": {
+      "reached_birth": 0,
+      "success": 0,
+      "lb<f": 0,
+      "k*vHb<c": 0
+    }
+  },
+  "split_to_processed": {
+    "matched_rows": 199989,
+    "unique_target_rows": 199989,
+    "max_log_coordinate_distance": 0.0,
+    "log_coordinate_tolerance": 1e-10,
+    "boolean_mismatches": {
+      "reached_birth": 0,
+      "success": 0,
+      "lb<f": 0,
+      "k*vHb<c": 0
+    }
+  },
+  "original_duplicates": {
+    "unique_points": 199989,
+    "duplicate_groups": 0,
+    "excess_rows": 0,
+    "conflicting_label_groups": 0,
+    "cross_split_groups": 0
+  },
+  "normalized_duplicates": {
+    "unique_points": 199989,
+    "duplicate_groups": 0,
+    "excess_rows": 0,
+    "conflicting_label_groups": 0,
+    "cross_split_groups": 0
+  },
+  "near_pairs": [
+    {
+      "max_coordinate_ratio_minus_one": 1e-08,
+      "pairs": 0,
+      "cross_split_pairs": 0,
+      "different_label_pairs": 0
+    },
+    {
+      "max_coordinate_ratio_minus_one": 0.001,
+      "pairs": 1,
+      "cross_split_pairs": 0,
+      "different_label_pairs": 0
+    }
+  ],
+  "nearest_training_points": {
+    "val": {
+      "max_coordinate_ratio_minus_one_quantiles": {
+        "min": 0.0033856687539928743,
+        "q25": 0.06596024096471588,
+        "median": 0.0899938235681461,
+        "q75": 0.1171399407511261,
+        "max": 0.742835867089872
+      },
+      "outside_training_coordinate_ranges": 1
+    },
+    "test": {
+      "max_coordinate_ratio_minus_one_quantiles": {
+        "min": 0.0015274227023857447,
+        "q25": 0.06553611904183486,
+        "median": 0.09016296040731095,
+        "q75": 0.11719755859286812,
+        "max": 0.6547809227512458
+      },
+      "outside_training_coordinate_ranges": 2
+    }
+  },
+  "coverage_grid": {
+    "train_gamma_k_grid_shape": [
+      30,
+      25
+    ],
+    "empty_cells": 0,
+    "cells_with_fewer_than_20_train_rows": 27,
+    "gamma_log10_edges": [
+      -3.0,
+      -2.8,
+      -2.6,
+      -2.4,
+      -2.2,
+      -2.0,
+      -1.7999999999999998,
+      -1.5999999999999999,
+      -1.4,
+      -1.2,
+      -1.0,
+      -0.7999999999999998,
+      -0.5999999999999996,
+      -0.3999999999999999,
+      -0.19999999999999973,
+      0.0,
+      0.20000000000000018,
+      0.40000000000000036,
+      0.6000000000000001,
+      0.8000000000000003,
+      1.0,
+      1.2000000000000002,
+      1.4000000000000004,
+      1.6000000000000005,
+      1.8000000000000007,
+      2.0,
+      2.2,
+      2.4000000000000004,
+      2.6000000000000005,
+      2.8000000000000007,
+      3.0
+    ],
+    "k_log10_edges": [
+      -4.0,
+      -3.8,
+      -3.6,
+      -3.4,
+      -3.2,
+      -3.0,
+      -2.8,
+      -2.5999999999999996,
+      -2.4,
+      -2.2,
+      -2.0,
+      -1.7999999999999998,
+      -1.5999999999999996,
+      -1.4,
+      -1.1999999999999997,
+      -1.0,
+      -0.7999999999999998,
+      -0.5999999999999996,
+      -0.3999999999999999,
+      -0.19999999999999973,
+      0.0,
+      0.20000000000000018,
+      0.40000000000000036,
+      0.6000000000000005,
+      0.8000000000000007,
+      1.0
+    ]
+  },
+  "split_summaries": [
+    {
+      "split": "train",
+      "rows": 159991,
+      "feasible": 67635,
+      "feasible_fraction": 0.4227425292672713,
+      "invalid_parameter_rows": 0,
+      "nonpositive_execution_time": 0,
+      "unsuccessful": 52749,
+      "timeouts": 484,
+      "solved_infeasible": 39607,
+      "feasible_but_unsuccessful": 0,
+      "label_condition_mismatches": 0,
+      "finite_lb_rows": 107726,
+      "unsuccessful_with_finite_lb": 484,
+      "growth_flag_mismatches_at_finite_lb": 484,
+      "maturity_flag_mismatches_at_finite_lb": 0,
+      "growth_flag_mismatches_at_successful_lb": 0,
+      "maturity_flag_mismatches_at_successful_lb": 0,
+      "timeout_zero_placeholders": 484,
+      "timeout_message_without_timeout_type": 1,
+      "necessary_bound_violations": 46391,
+      "feasible_violating_necessary_bound": 0,
+      "unsuccessful_inside_necessary_bound": 23918,
+      "unique_points": 159991,
+      "duplicate_groups": 0,
+      "excess_rows": 0,
+      "conflicting_label_groups": 0,
+      "cross_split_groups": 0
+    },
+    {
+      "split": "val",
+      "rows": 19999,
+      "feasible": 8455,
+      "feasible_fraction": 0.42277113855692783,
+      "invalid_parameter_rows": 0,
+      "nonpositive_execution_time": 0,
+      "unsuccessful": 6554,
+      "timeouts": 57,
+      "solved_infeasible": 4990,
+      "feasible_but_unsuccessful": 0,
+      "label_condition_mismatches": 0,
+      "finite_lb_rows": 13502,
+      "unsuccessful_with_finite_lb": 57,
+      "growth_flag_mismatches_at_finite_lb": 57,
+      "maturity_flag_mismatches_at_finite_lb": 0,
+      "growth_flag_mismatches_at_successful_lb": 0,
+      "maturity_flag_mismatches_at_successful_lb": 0,
+      "timeout_zero_placeholders": 57,
+      "timeout_message_without_timeout_type": 0,
+      "necessary_bound_violations": 5858,
+      "feasible_violating_necessary_bound": 0,
+      "unsuccessful_inside_necessary_bound": 2940,
+      "unique_points": 19999,
+      "duplicate_groups": 0,
+      "excess_rows": 0,
+      "conflicting_label_groups": 0,
+      "cross_split_groups": 0
+    },
+    {
+      "split": "test",
+      "rows": 19999,
+      "feasible": 8454,
+      "feasible_fraction": 0.42272113605680284,
+      "invalid_parameter_rows": 0,
+      "nonpositive_execution_time": 0,
+      "unsuccessful": 6624,
+      "timeouts": 65,
+      "solved_infeasible": 4921,
+      "feasible_but_unsuccessful": 0,
+      "label_condition_mismatches": 0,
+      "finite_lb_rows": 13440,
+      "unsuccessful_with_finite_lb": 65,
+      "growth_flag_mismatches_at_finite_lb": 65,
+      "maturity_flag_mismatches_at_finite_lb": 0,
+      "growth_flag_mismatches_at_successful_lb": 0,
+      "maturity_flag_mismatches_at_successful_lb": 0,
+      "timeout_zero_placeholders": 65,
+      "timeout_message_without_timeout_type": 0,
+      "necessary_bound_violations": 5778,
+      "feasible_violating_necessary_bound": 0,
+      "unsuccessful_inside_necessary_bound": 2990,
+      "unique_points": 19999,
+      "duplicate_groups": 0,
+      "excess_rows": 0,
+      "conflicting_label_groups": 0,
+      "cross_split_groups": 0
+    },
+    {
+      "split": "all",
+      "rows": 199989,
+      "feasible": 84544,
+      "feasible_fraction": 0.4227432508787983,
+      "invalid_parameter_rows": 0,
+      "nonpositive_execution_time": 0,
+      "unsuccessful": 65927,
+      "timeouts": 606,
+      "solved_infeasible": 49518,
+      "feasible_but_unsuccessful": 0,
+      "label_condition_mismatches": 0,
+      "finite_lb_rows": 134668,
+      "unsuccessful_with_finite_lb": 606,
+      "growth_flag_mismatches_at_finite_lb": 606,
+      "maturity_flag_mismatches_at_finite_lb": 0,
+      "growth_flag_mismatches_at_successful_lb": 0,
+      "maturity_flag_mismatches_at_successful_lb": 0,
+      "timeout_zero_placeholders": 606,
+      "timeout_message_without_timeout_type": 1,
+      "necessary_bound_violations": 58027,
+      "feasible_violating_necessary_bound": 0,
+      "unsuccessful_inside_necessary_bound": 29848,
+      "unique_points": 199989,
+      "duplicate_groups": 0,
+      "excess_rows": 0,
+      "conflicting_label_groups": 0,
+      "cross_split_groups": 0
+    }
+  ],
+  "regimes": [
+    {
+      "split": "train",
+      "regime": "k<1",
+      "rows": 128004,
+      "feasible": 52575,
+      "unsuccessful": 48666
+    },
+    {
+      "split": "train",
+      "regime": "k=1",
+      "rows": 0,
+      "feasible": 0,
+      "unsuccessful": 0
+    },
+    {
+      "split": "train",
+      "regime": "k>1",
+      "rows": 31987,
+      "feasible": 15060,
+      "unsuccessful": 4083
+    },
+    {
+      "split": "val",
+      "regime": "k<1",
+      "rows": 16016,
+      "feasible": 6633,
+      "unsuccessful": 5995
+    },
+    {
+      "split": "val",
+      "regime": "k=1",
+      "rows": 0,
+      "feasible": 0,
+      "unsuccessful": 0
+    },
+    {
+      "split": "val",
+      "regime": "k>1",
+      "rows": 3983,
+      "feasible": 1822,
+      "unsuccessful": 559
+    },
+    {
+      "split": "test",
+      "regime": "k<1",
+      "rows": 15970,
+      "feasible": 6587,
+      "unsuccessful": 6104
+    },
+    {
+      "split": "test",
+      "regime": "k=1",
+      "rows": 0,
+      "feasible": 0,
+      "unsuccessful": 0
+    },
+    {
+      "split": "test",
+      "regime": "k>1",
+      "rows": 4029,
+      "feasible": 1867,
+      "unsuccessful": 520
+    },
+    {
+      "split": "all",
+      "regime": "k<1",
+      "rows": 159990,
+      "feasible": 65795,
+      "unsuccessful": 60765
+    },
+    {
+      "split": "all",
+      "regime": "k=1",
+      "rows": 0,
+      "feasible": 0,
+      "unsuccessful": 0
+    },
+    {
+      "split": "all",
+      "regime": "k>1",
+      "rows": 39999,
+      "feasible": 18749,
+      "unsuccessful": 5162
+    }
+  ],
+  "plot_slabs": [
+    {
+      "center_k": 0.03,
+      "log10_halfwidth": 0.05,
+      "rows": 4000
+    },
+    {
+      "center_k": 0.3,
+      "log10_halfwidth": 0.05,
+      "rows": 4000
+    },
+    {
+      "center_k": 3.0,
+      "log10_halfwidth": 0.05,
+      "rows": 4000
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+error_type,error_message,rows
+none,Maximum execution time exceeded,1
+none,,199382
+time_limit_reached,Maximum execution time exceeded,606

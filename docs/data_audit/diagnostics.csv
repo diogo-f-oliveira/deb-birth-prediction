@@ -1,0 +1,13 @@
+split,success,reached_birth,error_type,rows
+test,False,False,none,6559
+test,False,False,time_limit_reached,65
+test,True,False,none,4921
+test,True,True,none,8454
+train,False,False,none,52265
+train,False,False,time_limit_reached,484
+train,True,False,none,39607
+train,True,True,none,67635
+val,False,False,none,6497
+val,False,False,time_limit_reached,57
+val,True,False,none,4990
+val,True,True,none,8455

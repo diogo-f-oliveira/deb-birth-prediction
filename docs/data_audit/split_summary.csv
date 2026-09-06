@@ -1,0 +1,5 @@
+split,rows,feasible,feasible_fraction,invalid_parameter_rows,nonpositive_execution_time,unsuccessful,timeouts,solved_infeasible,feasible_but_unsuccessful,label_condition_mismatches,finite_lb_rows,unsuccessful_with_finite_lb,growth_flag_mismatches_at_finite_lb,maturity_flag_mismatches_at_finite_lb,growth_flag_mismatches_at_successful_lb,maturity_flag_mismatches_at_successful_lb,timeout_zero_placeholders,timeout_message_without_timeout_type,necessary_bound_violations,feasible_violating_necessary_bound,unsuccessful_inside_necessary_bound,unique_points,duplicate_groups,excess_rows,conflicting_label_groups,cross_split_groups
+train,159991,67635,0.4227425292672713,0,0,52749,484,39607,0,0,107726,484,484,0,0,0,484,1,46391,0,23918,159991,0,0,0,0
+val,19999,8455,0.42277113855692783,0,0,6554,57,4990,0,0,13502,57,57,0,0,0,57,0,5858,0,2940,19999,0,0,0,0
+test,19999,8454,0.42272113605680284,0,0,6624,65,4921,0,0,13440,65,65,0,0,0,65,0,5778,0,2990,19999,0,0,0,0
+all,199989,84544,0.4227432508787983,0,0,65927,606,49518,0,0,134668,606,606,0,0,0,606,1,58027,0,29848,199989,0,0,0,0
