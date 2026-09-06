@@ -106,14 +106,17 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 - Adapt plotting so normalized axes and critical surfaces have correct labels and reference bounds. Remove the assumption that every plot has original-variable `f` and `k` annotations taken from the first row; check slice assumptions where they are needed.
 - **Done when:** a small shared input set can be passed through each supported formulation without caller-managed scaling, predictions survive saving/loading, and shared evaluation/plotting works for both original and normalized coordinates. Record direct checks rather than creating a new test suite.
 
-### T07 - Clarify analytical constraints and their implementation
+### T07 - Review and complete the mathematical proof
 
-- [ ] **TODO** | Dependencies: existing derivation; coordinate with T03/T05/T06. Not a gate for training or tuning.
-- Translate the analytical construction into explicit implementation expectations: normalization, margin sign, strict inequality, temperature, and the exact `k=1` identity. Distinguish identities imposed by architecture from properties the learner only approximates.
-- Do not use numerical experiments to establish the theorem. If the final critical-boundary argument needs more exposition, clarify it analytically, especially why the viable terminal-length family yields the stated interval of reachable maturities and why its endpoint is the critical value for `k>1`.
-- Use a small direct calculation only if useful to catch implementation errors. Do not require DEBtool comparisons, paired solver reruns, a numerical Phi/Psi evaluator, or recovery of timeout cases.
-- **Done when:** the analytical contract and the chosen treatment of exact constraints are documented with the model implementation; any remaining proof-exposition question is stated precisely rather than turned into a numerical-validation project.
-- **Scope revision (2026-09-06):** the previous independent numerical-reference task is removed. Numerical evaluation of Psi can be revisited only for a specific later objective, such as direct boundary regression, if requested or justified by that work.
+- [ ] **TODO** | Dependencies: `docs/birth_equations.md`. Can proceed independently of model implementation; does not block initial training or tuning.
+- Check the assumptions, parameter domain, scaling transformation, and integral expressions in the existing derivation.
+- Establish that the viable trajectory family attains every maturity below the proposed critical value, making the feasible maturity set the stated interval.
+- Justify why the specified endpoint gives the maximum attainable viable maturity, particularly for `k > 1`. Distinguish a supremum on the strict viable region from a value attained on its limiting boundary.
+- Check existence and selection of `lambda_R`. Determine whether uniqueness is required for the characterization and prove it if so; do not assume uniqueness without an argument.
+- Confirm both directions of `nu_b < Psi(gamma, k)`, the strict inequality, and the treatment of equality, including the `k=1` case.
+- Update `docs/birth_equations.md` with missing arguments and explicit assumptions. If a claim remains unresolved, identify the exact claim and missing argument; do not present the characterization as fully proven or mark this task complete merely because the gap is documented.
+- **Done when:** every step leading to `nu_b < Psi(gamma, k)` is justified analytically, with assumptions stated. Numerical experiments are not a substitute for proof and are not required by this task.
+- **Scope:** mathematical review only. Implementation checks belong to T03/T05/T06; no DEBtool comparisons, numerical Phi/Psi evaluator, solver retries, or timeout relabeling are required. Complete this review before presenting the full critical-boundary characterization as proven.
 
 ### T08 - Finalize the experiment and temperature protocol
 
@@ -183,6 +186,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - [ ] **TODO** | Dependencies: completed relevant modeling/analysis milestones.
 - Update `README.md` with working commands, the new formulations, selected artifacts, and result locations. Keep the accepted PDF unchanged and document methodological corrections separately.
 - Summarize which hypotheses were supported, which were not, remaining solver/coverage limitations, and the strongest findings for the next paper. Keep historical and new results distinguishable.
+- Before presenting the full critical-boundary characterization as proven, require T07's analytical completion; otherwise state the unresolved mathematical claim explicitly.
 - Make this backlog reflect the actual remaining work; add follow-up tasks only when results or the user justify them.
 - **Done when:** another session can reproduce the selected analyses using the recorded environment, data, configurations, and commands, and can identify the next unfinished research step.
 
@@ -193,3 +197,4 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - **2026-09-06:** Completed T01 and recorded commands/results in `docs/environment_baseline.md`. The conda environment and both archived model loaders work. Approved reads outside the sandbox confirmed the data are intact. Next: T02 normalization/coverage audit.
 - **2026-09-06:** Completed T02 with the reproducible audit script, report, source hashes, row mapping, and plots. Normalization preserves 199,989 distinct rows without audited cross-split near-duplicate leakage. Retained all original labels and splits, documented solver-failure/timeout caveats, and deferred T11. Next: T03 shared formulation/data/config work.
 - **2026-09-06:** User clarified that solver timeouts/nonconvergence are infeasible for the intended practical screening task. Retained that policy without alternative-solver relabeling. Kept AmP evaluation in T12 and extra distribution-specific evaluations optional. Replaced T07's numerical-reference project with lightweight analytical-contract/implementation work and removed it as a dependency for training/tuning.
+- **2026-09-06:** User approved T07 as an explicit mathematical-proof review: assumptions, scaling/integrals, attainable-maturity interval, critical endpoint, lambda_R existence/selection and any necessary uniqueness, and strict boundary treatment. Completion requires analytical justification, not numerical verification. Initial model work can proceed independently, but a claim of a complete proof depends on T07. This chat is now planning-only.
