@@ -8,6 +8,8 @@ Reuse the supplied splits for initial normalized and critical-boundary classific
 
 This is a data-integrity and coverage assessment, not independent validation of the critical-boundary derivation or the solver labels. The binary labels support training a boundary classifier; they are not direct regression targets for `Psi`.
 
+**Application-policy clarification (2026-09-06):** the user intentionally treats solver timeouts/nonconvergence as infeasible for practical screening. The diagnostics below describe that target, not a request to recover feasible cases with another solver or clean their labels. The numerical-reference project previously proposed as T07 has been replaced by analytical-contract/implementation work; the historical audit measurements remain unchanged.
+
 ## Reproduce and inspect
 
 From the repository root:
@@ -58,7 +60,7 @@ The audit calculates `gamma = g/f`, `nu_b = v_Hb/f^3`, and `log_nu_b = log(v_Hb)
 
 Near neighbors are defined by the maximum absolute difference in natural-log `(gamma, k, nu_b)` coordinates being at most `log(1+tolerance)`. Thus every coordinate ratio must be within the stated multiplicative tolerance; this is not rounding into arbitrary bins. The one pair at 0.1% tolerance is within training and has matching labels. It remains in the data.
 
-These findings support reusing the split membership. They do not empirically demonstrate label invariance under changes in food level: the dataset contains no equivalent normalized pairs at the tighter tolerance on which to perform that comparison. Paired solver checks remain T07 work.
+These findings support reusing the split membership. The equations establish the scaling identity; this duplicate audit does not establish that numerical solver failures obey it. No paired solver study is required by the current plan.
 
 ## Coverage and remaining gaps
 
@@ -83,7 +85,7 @@ The maturity envelope reflects the conditional sampling scheme: for `k <= 1`, ap
 
 Each panel includes 4,000 observations within `abs(log10(k/k_center)) <= 0.05`, centered on `0.03`, `0.3`, and `3`. These are narrow bands of varying `k`, not exact fixed-k numerical boundaries. The figures show solver-unsuccessful observations separately from solved cases labeled infeasible.
 
-For T07, check the exact identity `Psi(gamma, 1) = 1` separately. Existing raw grids with `k=1, f=0.8` are present, including `grid_g_log_0p001_100_N300_k_fixed_1_vHb_log_0p001_10_N300_f_fixed_0p8.csv`. Their filenames/access were checked, but their contents and solver provenance have not yet been audited here. They are candidates for validation before generating new simulations.
+The exact identity `Psi(gamma, 1) = 1` is available analytically despite the absence of exact k=1 LHS samples. Existing raw grids with `k=1, f=0.8` are also present, including `grid_g_log_0p001_100_N300_k_fixed_1_vHb_log_0p001_10_N300_f_fixed_0p8.csv`. Their filenames/access were checked, but their contents and solver provenance have not yet been audited here. They are optional analysis resources, not a prerequisite for using the identity.
 
 ## Solver-label interpretation
 
@@ -102,13 +104,13 @@ Timeout rows require special handling: all 606 store `lb=0` and `tb=0` as unfill
 
 One training row has `error_type="none"` but the message `Maximum execution time exceeded`; the other 606 timeout messages match their timeout type. Preserve this inconsistency rather than silently changing the timeout count or label. The current generator writes `error_type="none"` on normal completion without clearing an earlier error message, which could explain stale metadata, but this audit does not reconstruct that row's execution history.
 
-Of the unsuccessful observations, 29,848 satisfy `k*nu_b < 1`. This does not prove their labels wrong: that condition is necessary, not sufficient. It identifies cases for future numerical investigation where this simple bound cannot independently justify rejection. Historical label agreement and mechanistic boundary accuracy must remain separate evaluation claims.
+Of the unsuccessful observations, 29,848 satisfy `k*nu_b < 1`. This does not prove their labels wrong: that condition is necessary, not sufficient. The configured solver budget is itself part of the intended practical rejection policy, so these rows remain negative without a required recovery study. Agreement with operational labels and exact mechanistic feasibility are distinct claims.
 
 ## Follow-through
 
 - T03: implement shared formulations/data preparation using the existing split membership and explicit row-aligned offsets.
 - T05/T06: start pilot training on the current labels; record that label policy with the runs.
-- T07: check exact `k=1`, paired food-scaling cases, and selected solver-unsuccessful or boundary-adjacent observations. Keep timeout placeholders out of numerical reference solutions.
-- T11: defer new simulation generation. Revisit only for demonstrated boundary-resolution gaps, extrapolation required by AmP species, or a justified label/reference-data correction.
+- T07: document the analytical constraints and their implementation; do not numerically re-prove the construction or relabel timeout cases.
+- T11: defer new simulation generation. Revisit only for demonstrated sampling needs or extrapolation required by a later application.
 
 No model was trained, no hyperparameters were selected, and no supplied CSV, archived model, or existing notebook was changed by this audit. Both figures were visually inspected after generation.

@@ -17,6 +17,7 @@ The paper describes the published baseline; the two Markdown research notes desc
 ## Scientific contract
 
 - The target is `reached_birth`: `1` / `True` means feasible according to the recorded labels. `success`, timeouts, execution errors, and solver convergence are diagnostics, not interchangeable targets.
+- The intended application is practical feasibility screening: the user explicitly treats get_lb2 timeouts/nonconvergence within the configured budget as infeasible. Retain these negative labels; do not launch alternative-solver retries or relabeling to recover mathematically feasible points by default. Preserve diagnostics to explain outcomes. Exact scaling and the critical surface describe the DEB equations, whereas a numerical solver's failure pattern need not obey those identities exactly.
 - Archived model inputs are ordered `(g, k, v_Hb, f)`, regardless of the order used in prose or equations. Preserve that contract when loading historical artifacts.
 - Work on finite positive `g`, `k`, `f`, and `v_Hb` for the logarithmic formulations. Handle invalid inputs explicitly; do not silently clip physical parameters into the domain. Do not assume `k <= 1`.
 - `v_Hb` denotes the original scaled maturity at birth, not its food-normalized counterpart. Use explicit names for transformed quantities and document feature order.
@@ -39,7 +40,7 @@ For the boundary formulation:
 - Positive temperature changes probability sharpness but leaves the zero-margin boundary unchanged. Tune temperature on validation data. A separately tuned probability threshold can move the decision boundary and must be reported separately.
 - Prefer stable log-domain calculations such as `log(nu_b) = log(v_Hb) - 3*log(f)` and numerically stable loss/sigmoid implementations.
 
-The derivation gives the following scientific checks: `Psi(gamma, 1) = 1`; growth limits first for `k < 1`; maturation limits first for `k > 1`. For `k < 1`, the boundary uses `Phi(1; gamma, k)`. For `k > 1`, it uses the first admissible maturation-stationary terminal length `lambda_R < 1`, as defined in Eqs. (41)-(42). Validate new numerical implementations against the equations, limiting cases, and reliable solver outputs before using them to relabel data or make scientific claims. Do not equate the new derivation with independent numerical validation.
+The derivation gives analytical constraints: `Psi(gamma, 1) = 1`; growth limits first for `k < 1`; maturation limits first for `k > 1`. For `k < 1`, the boundary uses `Phi(1; gamma, k)`. For `k > 1`, it uses the first admissible maturation-stationary terminal length `lambda_R < 1`, as defined in Eqs. (41)-(42). Numerical experiments are not required to establish a proven mathematical result and cannot replace a missing proof argument. If a mathematical step is implicit, identify and address it analytically when relevant. Use small implementation checks only where useful, for example to catch a sign or normalization error. Do not build a numerical Psi reference or delay training for solver comparisons unless a concrete later experiment needs one.
 
 The accepted paper calls `k*v_Hb < f^3` sufficient but not necessary in Section II. The displayed strict growth and maturation conditions imply this inequality, so it is a necessary screening condition, not by itself a sufficient feasibility test. Preserve the accepted PDF and flag this wording when extending the analysis.
 
@@ -71,12 +72,13 @@ The existing GP implementation uses `gplearn`. Before implementing the new GP fo
 
 - Preserve supplied raw data, splits, and archived models unless changing them is part of the requested work. The preprocessing notebook overwrites processed CSVs, including splits; do not execute it as a setup check.
 - The current preprocessing source is `data/raw/sample4D_lhs_N_200000_g_1em3_1e2_k_m4_1_f_0p1_1_ddec_1_getlb2.csv`. The documented split is stratified 80/10/10 with seed 42, after filtering nonpositive execution times and missing/nonfinite inputs.
-- Historical labels include solver failures and six-second timeouts as infeasible. Distinguish agreement with these labels from agreement with mechanistic feasibility. Investigate solver failures, tolerances, and near-boundary disagreements before changing label policy; preserve diagnostics and provenance.
+- Solver failures and six-second timeouts are intentionally treated as infeasible for the practical screening target, not as a default label-cleaning backlog. Keep that policy, diagnostics, and solver budget explicit. Do not claim the operational failure boundary is mathematically identical to the DEB critical surface.
 - Keep `get_lb` and `get_lb2` dataset provenance distinct. MATLAB regeneration requires external DEBtool routines, relevant toolboxes, and AmP data where applicable. Record solver version, settings, timeout, sampling ranges, seed, and label policy for new data.
 - Use matching split membership and training subsets across formulations. Fit scalers and training weights on training data only; tune hyperparameters, temperature, and operating thresholds on validation data; reserve test data for final evaluation.
 - Check whether normalization or augmentation creates equivalent observations across splits. For species generalization, account for related perturbations from the same species when defining splits.
 - Record formulation, feature order/transforms, data identity, seed, configuration, dependency versions, and code revision with results. Save scalers, temperature, thresholds, model state or expression, and metrics needed to reproduce inference.
 - Report per-class errors, macro-F1, MCC, and ranking metrics as appropriate, not accuracy alone. Distinguish falsely rejecting a feasible set from falsely accepting an infeasible one. Include boundary slices across `k < 1`, `k = 1`, and `k > 1`, and identify extrapolation. Compare repeated seeds and matched sampling budgets for performance and sample-efficiency claims.
+- Use the generated dataset for the main model comparison. Broad-domain versus boundary-focused evaluation is an optional diagnostic, not a prerequisite or a mandatory new benchmark. Keep evaluation on the strongly feasibility-skewed AmP population in T12; do not make an AmP-shaped training distribution a default requirement.
 
 ## Setup and validation
 

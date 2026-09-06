@@ -31,6 +31,8 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 
 Use `gamma = g/f`, `nu_b = v_Hb/f^3`, and boundary probability `sigmoid((F - log(nu_b))/T)`, with `T > 0`. The four new models are the priority. Historical artifacts provide context; claims about the effect of formulation require comparable data, preprocessing, and training/tuning budgets, or an explicit explanation of the differences.
 
+The target is practical feasibility: retain negative labels for get_lb2 timeouts/nonconvergence within the solver budget. Recovering theoretical feasibility with another solver is not required for this application. Diagnostics remain useful, but alternative-solver relabeling is outside the current plan. Exact DEB invariance constrains the model construction; it does not guarantee exact reproduction of numerical failure patterns. Use the current generated distribution for the main comparison and reserve AmP-specific evaluation for T12.
+
 ## Ordered backlog
 
 ### T01 - Verify the working environment and baseline access
@@ -104,15 +106,14 @@ Use `gamma = g/f`, `nu_b = v_Hb/f^3`, and boundary probability `sigmoid((F - log
 - Adapt plotting so normalized axes and critical surfaces have correct labels and reference bounds. Remove the assumption that every plot has original-variable `f` and `k` annotations taken from the first row; check slice assumptions where they are needed.
 - **Done when:** a small shared input set can be passed through each supported formulation without caller-managed scaling, predictions survive saving/loading, and shared evaluation/plotting works for both original and normalized coordinates. Record direct checks rather than creating a new test suite.
 
-### T07 - Establish a numerical reference for the new boundary
+### T07 - Clarify analytical constraints and their implementation
 
-- [ ] **TODO** | Dependencies: T02; T03 for shared notation/transforms.
-- Review the critical-boundary construction, including the interpretation of the first stationary maturation point for `k > 1`. Separate analytically established identities from claims still needing numerical support.
-- Start with exact `k=1` checks and a modest set of reliable existing solver cases. Check scaling invariance at several food levels when solver access permits.
-- Use T02's audit to select checks: existing k=1 grids, sparse gamma extremes, and unsuccessful points inside the necessary bound. Treat timeout `lb=tb=0` values as placeholders rather than numerical solutions; see `docs/normalized_data_audit.md`.
-- Where needed, implement a small numerical evaluator of `Phi`/`Psi` from the derivation: handle the infinite integration endpoint, convergence, and the first admissible `lambda_R` root explicitly. Check sensitivity to numerical settings and compare with an independent birth solver where available.
-- **Done when:** a reference note and reproducible calculations cover all three `k` regimes and document discrepancies and tolerances. If external solver access prevents independent comparison, retain that limitation and avoid presenting the derived evaluator as independently validated ground truth.
-- **Scope:** this supports scientific boundary evaluation; it need not delay initial model prototypes or become a large dataset-generation project.
+- [ ] **TODO** | Dependencies: existing derivation; coordinate with T03/T05/T06. Not a gate for training or tuning.
+- Translate the analytical construction into explicit implementation expectations: normalization, margin sign, strict inequality, temperature, and the exact `k=1` identity. Distinguish identities imposed by architecture from properties the learner only approximates.
+- Do not use numerical experiments to establish the theorem. If the final critical-boundary argument needs more exposition, clarify it analytically, especially why the viable terminal-length family yields the stated interval of reachable maturities and why its endpoint is the critical value for `k>1`.
+- Use a small direct calculation only if useful to catch implementation errors. Do not require DEBtool comparisons, paired solver reruns, a numerical Phi/Psi evaluator, or recovery of timeout cases.
+- **Done when:** the analytical contract and the chosen treatment of exact constraints are documented with the model implementation; any remaining proof-exposition question is stated precisely rather than turned into a numerical-validation project.
+- **Scope revision (2026-09-06):** the previous independent numerical-reference task is removed. Numerical evaluation of Psi can be revisited only for a specific later objective, such as direct boundary regression, if requested or justified by that work.
 
 ### T08 - Finalize the experiment and temperature protocol
 
@@ -142,10 +143,11 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ### T09 - Train, tune, and compare the models
 
-- [ ] **TODO** | Dependencies: T08 and T06A; use T08A for command-line execution once implemented; T07 for scientific boundary comparisons.
+- [ ] **TODO** | Dependencies: T08 and T06A; use T08A for command-line execution once implemented.
 - Run the agreed experiments in distinct run directories. Record configurations, seeds, timing, model size/expression complexity, training history, and selected artifacts. Keep interrupted or failed runs identifiable.
 - Freeze model choices using validation results, then evaluate the test split. Produce a consolidated table with macro-F1, MCC, per-class precision/recall, confusion counts, AUROC/AP, and probability quality where relevant.
-- Plot boundary slices and `F`/`Psi` across the three maintenance regimes. Separate agreement with dataset labels from agreement with the numerical reference; label extrapolation and unresolved solver cases.
+- Plot learned boundary slices and `F`/`Psi` across the three maintenance regimes using the existing data and analytical constraints. Report agreement with the practical labels, including failures/timeouts, and identify extrapolation. A separate numerical critical-surface reference is not required.
+- Broad-coverage versus near-boundary summaries may be useful diagnostics if results warrant them; do not generate extra evaluation datasets by default. AmP-specific performance belongs to T12.
 - Measure both single-sample and batch inference cost under a recorded hardware/timing protocol. Include preprocessing and boundary comparison in the end-to-end surrogate timing.
 - **Done when:** a reproducible comparison notebook/report links selected runs, tables, plots, uncertainty across seeds, and limitations. Performance conclusions must follow the results rather than the expected GP advantage.
 
@@ -159,20 +161,21 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ### T11 - Extend simulation generation only where justified
 
-- [ ] **DEFERRED** | Dependencies: T02 identifies gaps; T07 informs boundary targeting.
-- **Decision (2026-09-06):** T02 supports reuse of the existing 199,989 rows for initial classification experiments. Revisit after T07/T09 reveal a specific boundary/reference gap or T12 establishes out-of-domain species requirements. Do not regenerate merely to remove f as an independent input.
+- [ ] **DEFERRED** | Dependencies: T02/T09 identify a concrete sampling gap, or T12 establishes a need.
+- **Decision (2026-09-06):** T02 supports reuse of the existing 199,989 rows for initial classification experiments. Revisit only for a demonstrated sampling need. Do not regenerate merely to remove f as an independent input or retry failures solely to recover theoretical feasibility.
 - If transformed existing data are sufficient, mark this task `DEFERRED` with that finding. Revisit if boundary diagnostics or AmP coverage expose gaps.
 - Otherwise, adapt a generator to sample normalized `(gamma, k, nu_b)`, passing `(g=gamma, k, v_Hb=nu_b, f=1)` to the existing solver for compatibility. Specify ranges and boundary-focused sampling from the measured gaps.
-- Keep new datasets separate and save solver version/settings, timeout, sampling seed, and diagnostic/label policy. Preserve a distinction between unresolved solver outcomes and demonstrated infeasibility.
+- Keep new datasets separate and save solver version/settings, timeout, sampling seed, and diagnostic/label policy. Retain timeouts/nonconvergence as negative practical-feasibility labels and keep their diagnostics separate from returned-solution constraint violations.
 - **Done when:** either the no-new-data decision is recorded, or a small pilot confirms the new generator and its provenance before the needed dataset is produced. If new data change the benchmark, version the protocol and repeat affected comparisons explicitly.
 
 ### T12 - Explore AmP species relative to the learned boundary
 
-- [ ] **TODO** | Dependencies: T09; T07 for interpretation; access to suitable AmP data.
+- [ ] **TODO** | Dependencies: T09; access to suitable AmP data.
 - Identify a versioned AmP source and retain species identity/model type. Check applicability of the standard embryo equations. Separate fitted species parameter sets from the repository's perturbed-parameter simulation dataset.
+- Evaluate the learned classifier on AmP as a later application study. Expect strong feasibility skew and report false rejections/feasible-case recall appropriately; do not mistake performance on mostly feasible species for evidence of discrimination on both sides of the boundary. Do not redesign training around the AmP class proportions by default.
 - Compute `eta = v_Hb/g^3` and plot species in `(eta, k)` space. At explicitly stated maternal food levels, compute `gamma`, `nu_b`, and signed margin `F(gamma,k) - log(nu_b)`.
 - Find food-boundary intersections using `log(eta) + 3*log(gamma) = F(gamma,k)`, then `f_crit = g/gamma_crit`. Search an explicit admissible food interval, handle absent/multiple roots, and verify which side is feasible before calling a root the minimum viable food level.
-- Plot margin and food thresholds with species metadata where available. Flag out-of-domain species and uncertain boundary estimates; check selected near-boundary cases numerically when possible.
+- Plot margin and food thresholds with species metadata where available. Flag out-of-domain species and uncertain boundary estimates. Numerical comparisons are optional tools for a specific interpretation question, not required recovery of timeout-labeled points.
 - **Done when:** a reproducible analysis links species provenance, derived values, plots, root-handling decisions, and supported ecological observations without turning associations into causal claims.
 
 ### T13 - Consolidate the research outputs
@@ -189,3 +192,4 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - **2026-09-06:** Added the requested structural improvements to T03/T05/T06/T08 and added T06A for shared inference/evaluation. Recorded source-inspection findings to address: ignored GP split settings, directory creation during config construction, NN inference mode/no-scaling handling, checkpoint selection, repeated prediction passes, and original-coordinate plotting assumptions. Added T08A as a proposed minimal training CLI. No refactor or CLI implementation has been performed.
 - **2026-09-06:** Completed T01 and recorded commands/results in `docs/environment_baseline.md`. The conda environment and both archived model loaders work. Approved reads outside the sandbox confirmed the data are intact. Next: T02 normalization/coverage audit.
 - **2026-09-06:** Completed T02 with the reproducible audit script, report, source hashes, row mapping, and plots. Normalization preserves 199,989 distinct rows without audited cross-split near-duplicate leakage. Retained all original labels and splits, documented solver-failure/timeout caveats, and deferred T11. Next: T03 shared formulation/data/config work.
+- **2026-09-06:** User clarified that solver timeouts/nonconvergence are infeasible for the intended practical screening task. Retained that policy without alternative-solver relabeling. Kept AmP evaluation in T12 and extra distribution-specific evaluations optional. Replaced T07's numerical-reference project with lightweight analytical-contract/implementation work and removed it as a dependency for training/tuning.
