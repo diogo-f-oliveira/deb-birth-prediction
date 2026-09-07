@@ -17,9 +17,9 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 - Use conda `debbirth` for code execution. Prefer direct scientific checks and small experiments over new test files. Do not create package infrastructure or a general experiment framework just to complete this backlog.
 - This file is a development plan, not a request to start every experiment now. Execute the scope of the active user request; no background scheduling is implied.
 
-**Current task:** None. T01-T03 are complete; the new-model pilots remain ahead.
+**Current task:** None. T01-T02 are complete. T03's shared foundation is implemented, with a reopened tuning-save regression; the new-model pilots remain ahead.
 
-**Next action:** T04, assess GP extension points and prototype boundary fitness. T05 can proceed independently using the T03 interfaces in `docs/formulations_and_data.md`.
+**Next action:** Correct and verify the T03 best-model saving regression, then proceed to T04. T05 can use the implemented T03 interfaces independently. JSON-based tuning integration is tracked separately in T08B, before T09.
 
 ## Model comparison
 
@@ -56,7 +56,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
 ### T03 - Separate formulations, data preparation, and configuration
 
-- [x] **DONE** | Dependencies: T02.
+- [ ] **TODO (reopened)** | Dependencies: T02. Shared foundation completed; only the regression follow-up below remains.
 - Extend the data/schema path with explicit formulation names and feature order. Keep the full-parameter `(g, k, v_Hb, f)` behavior intact.
 - Introduce a small formulation module (for example `src/debbirth/formulations.py`) that explicitly separates learned output, boundary margin, and probability. Share the mathematical definitions across GP and NN without forcing their training loops or array backends into one abstraction.
 - Separate CSV/split loading and shared feature preparation from NN tensor conversion, device placement, and batching. Shared data preparation should not import model training configurations. Carry labels, source-row identity, and boundary offsets together through selection and shuffling.
@@ -69,6 +69,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 - **Result (2026-09-06):** Added `full_par`/`normalized`/`boundary` schemas, shared preparation and output semantics, aligned provenance/offset records, family adapters, pure config/path handling, registered GP serialization, and JSON experiment settings. `docs/formulations_and_data.md` records interfaces and actual checks. Both new representations prepared all 199,989 supplied rows. Direct equivalence/alignment/scaling/config checks and tiny full-parameter GP/NN save/load runs passed, including NN without scaling. Archived predictions and supplied data/model hashes are unchanged. Artifacts and the session check script are under `results/runs/t03_validation/`; its summary identifies the GP run. Boundary training and the new-model pilots remain T04-T06; CPU only was validated.
 
 - **Follow-up (2026-09-07):** At the user's request, GP JSON now selects constants by name only. `CONSTANT_REGISTRY` in `models/gp/constants.py` supplies values. Updated the example, serializer, symbolic example, and documentation; direct checks covered all registry values, JSON round-trip without directory creation, invalid/duplicate/conflicting entries, runtime constant columns, archived predictions, and symbolic substitution. No training or artifact migration was needed.
+- **Regression follow-up (2026-09-07, TODO):** In `src/debbirth/models/gp/calibrate.py`, the best-model saving branch ignores the resolved config returned by `save_gp_run`, leaving the returned config's `outdir` unset and causing subsequent test-metric saving to fail. Capture and return the resolved config/output path and pass the available data metadata when saving. Verify saved-best runs with and without explicit test evaluation, provenance in the saved metadata, and unchanged unsaved behavior using a tiny check. This is a T03 correction; do not defer it to T08B. Restore `DONE` after that correction is verified; the earlier foundation checks remain valid.
 
 ### T04 - Choose the GP implementation approach
 
@@ -147,9 +148,21 @@ Proposed command, to be documented as working only after implementation:
 conda run -n debbirth python -m src.debbirth.train --model nn --formulation boundary --config experiments/nn_boundary.json --seed 42
 ```
 
+### T08B - Integrate experiment configurations with hyperparameter tuning
+
+- [ ] **TODO** | Dependencies: T03 for the existing GP path; T05/T06 for the new NN/GP variants. Use T08 for full-experiment search budgets and selection rules. T08A is not required: tuning calls the same Python trainers.
+- Load a base experiment JSON through the family dataclass loader. Construct each trial from that base plus sampled overrides; preserve all unsearched settings, including formulation, data paths, split policy, preprocessing, weights, and runtime options. Do not mutate the base config between trials.
+- Keep search-space definitions in small Python experiment scripts initially, using the existing Ray/HyperOpt approach where suitable. Avoid embedding executable distributions in ordinary training JSON or introducing a general configuration framework. Inspect optional tuning dependencies in `debbirth` before executing a tuning check.
+- Map sampled values to actual config fields explicitly. Compute dependent parameters such as tournament size, crossover probability, and mutation shares before validating the resolved trial config. Reject unknown or unused override keys instead of silently ignoring `gp_config_params`; use the same resolution when rerunning the selected trial.
+- Use registered primitive and constant names for fixed settings and categorical choices between alternative lists. Resolve names through the existing registries when constructing each trial; do not add separate tuning-only definitions.
+- Preserve matched data/subset identities and use validation data for selection. Follow T08 for training-temperature searches versus post-training calibration; held-out test evaluation stays explicit and separate from the search.
+- Save the base configuration, search specification/script identity, search seed/budget/objective, sampled trial parameters, and fully resolved ordinary training JSON for each trial. The selected run must retain its resolved output path, model/scaler state, metrics, and data/code provenance and be reproducible without invoking the tuner.
+- **Done when:** tiny GP and NN tuning runs exercise fixed settings, sampled overrides, dependent parameters, and named constant/function choices as applicable; selected artifacts reload consistently, and a selected run can be reproduced from its saved training JSON with matching data and seed. Record actual commands, resolved configurations, and validation results without full tuning or a new test framework.
+- **Current gap (2026-09-07):** The existing GP tuner constructs configs independently of the JSON examples, uses hardcoded named function/constant sets, and ignores extra GP configuration overrides. No JSON-based tuning integration or end-to-end tuning verification is claimed yet. The best-model saving regression is tracked under T03 rather than postponed here.
+
 ### T09 - Train, tune, and compare the models
 
-- [ ] **TODO** | Dependencies: T08 and T06A; use T08A for command-line execution once implemented.
+- [ ] **TODO** | Dependencies: T08, T08B, and T06A; use T08A for command-line execution once implemented.
 - Run the agreed experiments in distinct run directories. Record configurations, seeds, timing, model size/expression complexity, training history, and selected artifacts. Keep interrupted or failed runs identifiable.
 - Freeze model choices using validation results, then evaluate the test split. Produce a consolidated table with macro-F1, MCC, per-class precision/recall, confusion counts, AUROC/AP, and probability quality where relevant.
 - Plot learned boundary slices and `F`/`Psi` across the three maintenance regimes using the existing data and analytical constraints. Report agreement with the practical labels, including failures/timeouts, and identify extrapolation. A separate numerical critical-surface reference is not required.
@@ -203,3 +216,4 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - **2026-09-06:** User approved T07 as an explicit mathematical-proof review: assumptions, scaling/integrals, attainable-maturity interval, critical endpoint, lambda_R existence/selection and any necessary uniqueness, and strict boundary treatment. Completion requires analytical justification, not numerical verification. Initial model work can proceed independently, but a claim of a complete proof depends on T07. This chat is now planning-only.
 - **2026-09-06:** Completed T03 using the user-selected `full_par` name, JSON experiment settings, and explicit rejection of validation-free training. Shared preparation preserves row identity and maturity offsets; configs no longer create directories and GP settings are reconstructable by named primitives. Direct checks and small GP/NN runs passed in `debbirth`; see `docs/formulations_and_data.md` and `results/runs/t03_validation/summary.json`. No new-model tuning, GP backend migration, solver work, or data relabeling was performed.
 - **2026-09-07:** Replaced GP name/value JSON constants with registered names only. Old entries remain readable only when matching the registry; new saves always use names. Direct validation passed, with archived GP inference unchanged.
+- **2026-09-07:** Added T08B for base-JSON plus sampled-override tuning integration and made it a dependency of T09. Reopened T03 narrowly for the best-model saving path/provenance regression found during tuning-code inspection. Preserved the completed shared-foundation results. This update changes the backlog only; neither the regression fix nor tuning integration has been implemented or run.
