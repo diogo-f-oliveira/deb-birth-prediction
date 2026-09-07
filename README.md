@@ -18,6 +18,8 @@ Both archived models use four dimensionless inputs, in this order:
 
 The target is `reached_birth`: `True` / `1` indicates that birth is reached; `False` / `0` indicates that it is not reached according to the dataset labels.
 
+Shared data preparation now supports three formulations: **full-parameter** (`full_par`), **normalized** (`normalized`), and **critical boundary** (`boundary`). Their learned features are `(g, k, v_Hb, f)`, `(gamma, k, nu_b)`, and `(gamma, k)`, respectively. Boundary preparation carries `log_nu_b` separately from the learned features. See [formulations and data preparation](docs/formulations_and_data.md) for interfaces, configuration, and T03 validation results. Boundary training and the new model pilots remain subsequent tasks.
+
 ## Repository structure
 
 ```text
@@ -78,11 +80,10 @@ git clone https://github.com/diogo-f-oliveira/deb-birth-prediction.git
 cd deb-birth-prediction
 ```
 
-Use a dedicated Python environment. 
-Install the dependencies from `requirements.txt` and the additional packages used in the notebooks:
+Use the existing conda environment `debbirth` for repository execution:
 
 ```bash
-python -m pip install -r requirements.txt
+conda run -n debbirth python -c "import sys; print(sys.executable)"
 ```
 
 ## Training
@@ -90,11 +91,13 @@ python -m pip install -r requirements.txt
 Run the included training examples from the repository root:
 
 ```bash
-python -m src.debbirth.models.gp.train
-python -m src.debbirth.models.nn.train
+conda run -n debbirth python -m src.debbirth.models.gp.train
+conda run -n debbirth python -m src.debbirth.models.nn.train
 ```
 
-Each module defines its example configuration in its `__main__` block. These examples load the prepared splits, train a model, evaluate it, and save artifacts under `results/runs/`.
+These entry points load [gp_full_par.json](experiments/gp_full_par.json) and [nn_full_par.json](experiments/nn_full_par.json), train, report validation metrics, and print the saved directory under `results/runs/`. They preserve the previous example hyperparameters; these are full training runs, not setup checks. Held-out test evaluation is explicit and separate.
+
+Configuration construction and loading create no directories. Saved training returns `output["outdir"]` and a resolved `output["train_config"]`; use these rather than expecting an input config with `outdir=None` to be mutated. Runs record resolved settings, source CSV hashes, dependency versions, and code identity in `run_metadata.json`.
 
 Training settings can be customized through:
 
@@ -132,7 +135,7 @@ The notebooks provide workflows for:
 
 Before running the notebooks, adapt the local data and figure-output paths. Their relative paths generally assume a working directory of `notebooks/`, while imports require the repository root to be on Python’s module search path.
 
-The saved configuration files also contain absolute paths from the original training machine. Adapt these before using the configurations to load data. The saved GP configuration includes string representations of custom function objects, so it is not a standalone configuration that can directly reconstruct training.
+The archived configuration files contain absolute paths from the original training machine. Adapt these before using the configurations to load data. The archived GP configuration contains function-object addresses that cannot reconstruct training: `load_gp_run` warns and returns `train_cfg=None` while loading the joblib model for inference. New GP configs save registered primitive and constant names. New relative data/output paths resolve against the repository root.
 
 ## Regenerating simulation data
 

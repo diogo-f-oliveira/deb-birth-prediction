@@ -26,7 +26,7 @@ The representations to compare are:
 
 | Formulation | Learned function | Classification |
 | --- | --- | --- |
-| Original unconstrained | Score from `(g, k, v_Hb, f)` | Sigmoid of score |
+| Full-parameter unconstrained (`full_par`) | Score from `(g, k, v_Hb, f)` | Sigmoid of score |
 | Normalized unconstrained | Score from `(gamma, k, nu_b)` | Sigmoid of score |
 | Critical boundary | `F(gamma, k)`, approximating `log(Psi(gamma, k))` | `sigmoid((F - log(nu_b)) / T)` |
 
@@ -57,6 +57,7 @@ Follow `docs/next_steps.md`, implementing the part relevant to the user's curren
 ## Code map and implementation practices
 
 - `src/debbirth/data/`: MATLAB simulation generators; Python schema, loading, splitting, and scaling. Centralize reusable transformations here rather than duplicating notebook formulas.
+- `src/debbirth/formulations.py`: learned-output, boundary-margin, logit, and strict decision semantics. Formulation identifiers are `full_par`, `normalized`, and `boundary`.
 - `src/debbirth/models/gp/`: configuration, custom primitives/constants, training, tuning, and symbolic/MATLAB export. `calibrate.py` currently performs hyperparameter search; do not confuse it with probability calibration.
 - `src/debbirth/models/nn/`: PyTorch architecture, configuration, training, and loading.
 - `src/debbirth/evaluate/` and `src/debbirth/plot/`: shared metrics, comparisons, and decision-boundary plots.
@@ -65,6 +66,8 @@ Follow `docs/next_steps.md`, implementing the part relevant to the user's curren
 - `results/models/DEBBirthGP/` and `results/models/DEBBirthNet/`: historical artifacts. Write new experiments to distinct directories under `results/runs/` or `results/tune/`, which are ignored by Git.
 
 Follow the existing dataclass configuration and module structure. Use explicit feature schemas and `pathlib` paths; avoid new machine-specific absolute paths. Preserve old loading and inference behavior when adding formulations. The archived GP uses unscaled inputs and the NN requires its saved log/standardization scaler. Saved configurations contain historical absolute paths; GP function-object strings are not sufficient to reconstruct training. Changes to protected GP primitives must also be reflected and numerically checked in symbolic and MATLAB exports: algebraic simplification must not silently discard protection semantics.
+
+T03 shared preparation returns row-aligned `PreparedSplit` records; select/shuffle these records rather than independently indexing labels or offsets. CSV loading/preparation must not import model configs or Torch. Family adapters handle arrays/tensors and batching. Config construction/loading creates no directories; relative paths resolve against the repository root. Saved trainers return the resolved `train_config` and `outdir`, leaving an input config's `outdir=None` unchanged. GP configs serialize registered primitive and constant names; constant values are defined in `src/debbirth/models/gp/constants.py`. See `docs/formulations_and_data.md` for these interfaces and current limitations.
 
 The existing GP implementation uses `gplearn`. Before implementing the new GP formulations, assess whether its extension points support the required learned expression and fitness, especially the fixed observation-specific `-log(nu_b)` offset outside the evolved boundary tree and temperature handling. Do not assume either that gplearn must be retained or that migration is necessary. If it cannot support the new formulation cleanly, use a more customizable approach such as DEAP or another justified alternative. Base the choice on implementation simplicity, control over evolution/fitness, and research needs. Keep the existing gplearn baseline usable for comparisons without requiring the new models to share its backend.
 
@@ -97,7 +100,7 @@ conda run -n debbirth python -m src.debbirth.models.gp.train
 conda run -n debbirth python -m src.debbirth.models.nn.train
 ```
 
-These launch training and save artifacts; use deliberately small configurations for smoke checks. Their example settings are not necessarily the archived paper settings. Notebook relative paths generally assume `notebooks/` as the working directory while imports need the repository root on the Python path.
+These load `experiments/gp_full_par.json` and `experiments/nn_full_par.json`, train, validate, and save artifacts; use deliberately small configurations for smoke checks. Their example settings are not necessarily the archived paper settings. Both trainers require `train_val_test`; `train_test` is an explicit loader-only merge. Boundary training is rejected until T05/T06 implement its fixed-offset loss. Notebook relative paths generally assume `notebooks/` as the working directory while imports need the repository root on the Python path.
 
 This is a research repository, not a software package. Tests are usually unnecessary: do not create test files, expand a test suite, or introduce testing infrastructure by default. Prefer a small direct calculation, an existing notebook, a short smoke run, or inspection of experimental results when validation is useful. Add an automated test only when it has clear value for a consequential, otherwise difficult-to-detect error, or when the user requests it.
 

@@ -1,10 +1,10 @@
 # Development tasks
 
-Last updated: 2026-09-06
+Last updated: 2026-09-07
 
 ## Objective
 
-Develop normalized and critical-boundary birth-feasibility models for both GP and NN, compare them fairly, and use the learned boundary to explore AmP species. Retain the original four-input models for benchmarking. The scientific motivation is in `docs/next_steps.md`; the equations are in `docs/birth_equations.md`; working conventions are in `AGENTS.md`.
+Develop normalized and critical-boundary birth-feasibility models for both GP and NN, compare them fairly, and use the learned boundary to explore AmP species. Retain the full-parameter four-input models for benchmarking. The scientific motivation is in `docs/next_steps.md`; the equations are in `docs/birth_equations.md`; working conventions are in `AGENTS.md`.
 
 ## How to maintain this file
 
@@ -17,15 +17,15 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 - Use conda `debbirth` for code execution. Prefer direct scientific checks and small experiments over new test files. Do not create package infrastructure or a general experiment framework just to complete this backlog.
 - This file is a development plan, not a request to start every experiment now. Execute the scope of the active user request; no background scheduling is implied.
 
-**Current task:** None. T01 and T02 are complete; model implementation has not started.
+**Current task:** None. T01-T03 are complete; the new-model pilots remain ahead.
 
-**Next action:** T03, separate formulations, data preparation, and configuration. Reuse existing splits; see `docs/normalized_data_audit.md`.
+**Next action:** T04, assess GP extension points and prototype boundary fitness. T05 can proceed independently using the T03 interfaces in `docs/formulations_and_data.md`.
 
 ## Model comparison
 
 | Formulation | GP | NN | Role |
 | --- | --- | --- | --- |
-| Original: `(g, k, v_Hb, f)` | Existing gplearn classifier | Existing DEBBirthNet | Historical benchmark |
+| Full-parameter (`full_par`): `(g, k, v_Hb, f)` | Existing gplearn classifier | Existing DEBBirthNet | Historical benchmark |
 | Normalized: `(gamma, k, nu_b)` | New unconstrained score | New unconstrained score | Main comparison |
 | Boundary: `(gamma, k)` | Learn `F = log(Psi)` | Learn `F = log(Psi)` | Main comparison |
 
@@ -56,16 +56,19 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
 ### T03 - Separate formulations, data preparation, and configuration
 
-- [ ] **TODO** | Dependencies: T02.
-- Extend the data/schema path with explicit formulation names and feature order. Keep the original `(g, k, v_Hb, f)` behavior intact.
+- [x] **DONE** | Dependencies: T02.
+- Extend the data/schema path with explicit formulation names and feature order. Keep the full-parameter `(g, k, v_Hb, f)` behavior intact.
 - Introduce a small formulation module (for example `src/debbirth/formulations.py`) that explicitly separates learned output, boundary margin, and probability. Share the mathematical definitions across GP and NN without forcing their training loops or array backends into one abstraction.
 - Separate CSV/split loading and shared feature preparation from NN tensor conversion, device placement, and batching. Shared data preparation should not import model training configurations. Carry labels, source-row identity, and boundary offsets together through selection and shuffling.
 - Centralize normalization and `log_nu_b = log(v_Hb) - 3*log(f)`. For boundary training, supply `(gamma, k)` to the learned model and carry `log_nu_b` separately for the fixed comparison. Expose `x_b = gamma/(1+gamma)` as an optional derived feature.
 - Specify invalid-input behavior. Apply any learned standardization using training data only. Save formulation and transformation settings with each model; avoid copying transformations across notebooks and training modules.
 - Fix split configuration inconsistencies: GP currently ignores `cfg.data_splits`, and trainers assume a validation split. Implement or explicitly reject unsupported modes; never silently substitute another split policy.
-- Keep configuration construction/loading free of directory creation. Resolve shared paths in one place and create run directories only when starting/saving a run. Store GP primitive identifiers and constant values explicitly instead of relying on function-object strings from `default=str`.
+- Keep configuration construction/loading free of directory creation. Resolve shared paths in one place and create run directories only when starting/saving a run. Store registered GP primitive and constant names instead of relying on function-object strings from `default=str`; resolve constant values from the code registry.
 - Move reusable experiment settings out of hardcoded training-module `__main__` blocks into a small `experiments/` directory. Keep dataclass configs and separate family-specific trainers; avoid a broad framework or unrelated file moves.
 - **Done when:** both new representations can be obtained through shared preparation, a direct calculation confirms equivalent original inputs yield identical normalized inputs, the original input path still works, and config loading has no output-directory side effects. Split behavior and settings needed to reconstruct a run are explicit.
+- **Result (2026-09-06):** Added `full_par`/`normalized`/`boundary` schemas, shared preparation and output semantics, aligned provenance/offset records, family adapters, pure config/path handling, registered GP serialization, and JSON experiment settings. `docs/formulations_and_data.md` records interfaces and actual checks. Both new representations prepared all 199,989 supplied rows. Direct equivalence/alignment/scaling/config checks and tiny full-parameter GP/NN save/load runs passed, including NN without scaling. Archived predictions and supplied data/model hashes are unchanged. Artifacts and the session check script are under `results/runs/t03_validation/`; its summary identifies the GP run. Boundary training and the new-model pilots remain T04-T06; CPU only was validated.
+
+- **Follow-up (2026-09-07):** At the user's request, GP JSON now selects constants by name only. `CONSTANT_REGISTRY` in `models/gp/constants.py` supplies values. Updated the example, serializer, symbolic example, and documentation; direct checks covered all registry values, JSON round-trip without directory creation, invalid/duplicate/conflicting entries, runtime constant columns, archived predictions, and symbolic substitution. No training or artifact migration was needed.
 
 ### T04 - Choose the GP implementation approach
 
@@ -81,7 +84,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 - Extend the existing NN configuration/training path to support the normalized three-input score and the two-input `F(gamma, k)` output. Compute boundary logits outside the learned network using the fixed maturity offset and positive temperature.
 - Keep input preprocessing configurable and recorded. The final `F` output must be unrestricted in sign; positivity applies to `Psi = exp(F)`, not to `F`.
 - Save and load formulation, feature settings, scaler, weights, and temperature. Expose the boundary margin and critical maturity for analysis as well as birth probabilities.
-- Fix the no-scaling path so it still converts inputs to tensors and supports saving/loading with no scaler. Return inference-loaded models in evaluation mode so dropout is inactive by default.
+- No-scaling tensor conversion and saving/loading with no scaler were completed in T03. Still return inference-loaded models in evaluation mode so dropout is inactive by default.
 - Make checkpoint selection explicit: final epoch or best validation checkpoint, with the metric and selected epoch recorded. Save metrics corresponding to the saved weights. Keep historical reproduction settings available.
 - Run a small training experiment for each new formulation. Check finite loss/probabilities, prediction agreement after reload, and that the boundary probability decreases with increasing maturity at fixed `(gamma, k)`.
 - **Done when:** both variants train, save, reload, and predict through the existing workflow, with run paths and checks recorded. This task does not require full tuning.
@@ -132,7 +135,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
 - [ ] **TODO (proposed)** | Dependencies: T03, T05, and T06; use T08 for full-experiment configurations.
 - Provide one repository-root module entry point for training, backed by the same Python functions used in notebooks. A proposed interface is `python -m src.debbirth.train`; this module and the example config below do not exist yet.
-- Use a small standard-library argument parser. Expose model family (`gp`/`nn`), formulation (`original`/`normalized`/`boundary`), an experiment config file, and a few common overrides such as seed, data directory, output directory, and device/workers where applicable. Keep detailed architecture, primitive sets, and search settings in the config file rather than creating a flag for every parameter.
+- Use a small standard-library argument parser. Expose model family (`gp`/`nn`), formulation (`full_par`/`normalized`/`boundary`), an experiment config file, and a few common overrides such as seed, data directory, output directory, and device/workers where applicable. Keep detailed architecture, primitive sets, and search settings in the config file rather than creating a flag for every parameter.
 - Define precedence explicitly: defaults, then config, then explicitly supplied CLI overrides. Validate family/formulation compatibility and inputs before expensive work. Save the fully resolved config and invocation with the run and print the output directory and validation summary.
 - A training invocation should fit and validate one run. Keep held-out test evaluation explicit and separate from routine training/tuning. Leave experiment grids and hyperparameter search to simple scripts calling the same training functions initially.
 - Preserve callable training functions and historical entry points where practical. Do not require installation as a package, add orchestration infrastructure, or implement CLI-only training logic.
@@ -198,3 +201,5 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - **2026-09-06:** Completed T02 with the reproducible audit script, report, source hashes, row mapping, and plots. Normalization preserves 199,989 distinct rows without audited cross-split near-duplicate leakage. Retained all original labels and splits, documented solver-failure/timeout caveats, and deferred T11. Next: T03 shared formulation/data/config work.
 - **2026-09-06:** User clarified that solver timeouts/nonconvergence are infeasible for the intended practical screening task. Retained that policy without alternative-solver relabeling. Kept AmP evaluation in T12 and extra distribution-specific evaluations optional. Replaced T07's numerical-reference project with lightweight analytical-contract/implementation work and removed it as a dependency for training/tuning.
 - **2026-09-06:** User approved T07 as an explicit mathematical-proof review: assumptions, scaling/integrals, attainable-maturity interval, critical endpoint, lambda_R existence/selection and any necessary uniqueness, and strict boundary treatment. Completion requires analytical justification, not numerical verification. Initial model work can proceed independently, but a claim of a complete proof depends on T07. This chat is now planning-only.
+- **2026-09-06:** Completed T03 using the user-selected `full_par` name, JSON experiment settings, and explicit rejection of validation-free training. Shared preparation preserves row identity and maturity offsets; configs no longer create directories and GP settings are reconstructable by named primitives. Direct checks and small GP/NN runs passed in `debbirth`; see `docs/formulations_and_data.md` and `results/runs/t03_validation/summary.json`. No new-model tuning, GP backend migration, solver work, or data relabeling was performed.
+- **2026-09-07:** Replaced GP name/value JSON constants with registered names only. Old entries remain readable only when matching the registry; new saves always use names. Direct validation passed, with archived GP inference unchanged.

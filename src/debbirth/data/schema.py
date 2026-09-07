@@ -5,6 +5,15 @@ from typing import Iterable, Mapping, Sequence
 
 import pandas as pd
 
+from ..formulations import FORMULATIONS
+
+FULL_PAR_COLS = ("g", "k", "v_Hb", "f")
+FORMULATION_FEATURES = {
+    "full_par": FULL_PAR_COLS,
+    "normalized": ("gamma", "k", "nu_b"),
+    "boundary": ("gamma", "k"),
+}
+
 TARGET_COL: str = "reached_birth"  # boolean label: 1 if birth reached, else 0
 
 ID_COLS: tuple[str, ...] = (
@@ -133,11 +142,23 @@ def coerce_dtypes(df: pd.DataFrame) -> pd.DataFrame:
 class DatasetSpec:
     feature_set: str = "dimensionless"
     target_col: str = TARGET_COL
+    formulation: str = "full_par"
+    include_x_b: bool = False
+
+    def __post_init__(self):
+        if self.formulation not in FORMULATIONS:
+            raise ValueError(f"Unknown formulation {self.formulation!r}; expected {FORMULATIONS}.")
+        get_feature_columns(self.feature_set)
+        if self.formulation != "full_par" and self.feature_set != "dimensionless":
+            raise ValueError("Normalized/boundary formulations require feature_set='dimensionless'.")
+        if self.include_x_b and self.formulation == "full_par":
+            raise ValueError("Optional x_b is supported only for normalized/boundary formulations.")
 
     @property
     def feature_cols(self) -> list[str]:
-        cols = get_feature_columns(self.feature_set)
-        return cols
+        if self.formulation == "full_par":
+            return get_feature_columns(self.feature_set)
+        return list(FORMULATION_FEATURES[self.formulation]) + (["x_b"] if self.include_x_b else [])
 
     @property
     def n_features(self) -> int:
@@ -145,4 +166,19 @@ class DatasetSpec:
 
     @property
     def required_cols(self) -> set[str]:
-        return required_columns(self.feature_set)
+        inputs = self.feature_cols if self.formulation == "full_par" else FULL_PAR_COLS
+        return set(inputs) | {self.target_col}
+
+    def to_dict(self):
+        return {"feature_set": self.feature_set, "target_col": self.target_col,
+                "formulation": self.formulation, "include_x_b": self.include_x_b,
+                "feature_order": self.feature_cols}
+
+    @classmethod
+    def from_dict(cls, raw):
+        raw = dict(raw)
+        order = raw.pop("feature_order", None)
+        spec = cls(**raw)
+        if order is not None and list(order) != spec.feature_cols:
+            raise ValueError("Saved feature_order disagrees with the formulation/feature settings.")
+        return spec

@@ -1,0 +1,38 @@
+{
+  "batch_size": 64,
+  "boundary_temperature": 1.0,
+  "data_dir": "data/processed",
+  "data_spec": {
+    "feature_order": [
+      "g",
+      "k",
+      "v_Hb",
+      "f"
+    ],
+    "feature_set": "dimensionless",
+    "formulation": "full_par",
+    "include_x_b": false,
+    "target_col": "reached_birth"
+  },
+  "data_splits": "train_val_test",
+  "device": "cpu",
+  "epochs": 100,
+  "lr": 0.0001,
+  "net_config": {
+    "dropout": 0.2,
+    "hidden_dims": [
+      32,
+      32,
+      32
+    ],
+    "input_dim": 4,
+    "threshold": 0.5
+  },
+  "num_workers": 4,
+  "outdir": null,
+  "pos_weight": null,
+  "scaling_type": "log_standardize",
+  "seed": 42,
+  "use_pos_weight": true,
+  "weight_decay": 0.001
+}

@@ -1,99 +1,69 @@
-from __future__ import annotations
+"""CSV preparation with lazy historical family-loader wrappers."""
+from hashlib import sha256
 
-from typing import Dict, Tuple
-
-import numpy as np
 import pandas as pd
-from torch.utils.data import TensorDataset, DataLoader
 
+from .prepare import SOURCE_FILE, SOURCE_ROW, prepare_features, prepare_split
 from .schema import DatasetSpec
-from .scalers import fit_and_scale_data_pytorch, scale_data_pytorch
-from ..models.nn.config import TrainDEBBirthNetConfig
-from ..models.gp.config import TrainGPConfig
-from ..utils.pytorch import convert_to_tensor
+from ..utils.paths import portable_path, resolve_repo_path
+
+SPLIT_TYPES = ("train_val_test", "train_test")
 
 
-def load_splits(dataset_dir: str, split_type='train_val_test') -> Dict[str, pd.DataFrame]:
+def load_splits(dataset_dir, split_type="train_val_test"):
+    """Read supplied CSVs, retaining source file/record columns and hash attrs.
+
+    train_test explicitly merges train and validation; unknown modes fail.
+    No source CSV is changed. Record positions are zero-based before merging.
     """
-    Load pre-made splits from disk.
+    if split_type not in SPLIT_TYPES:
+        raise ValueError(f"Unknown split_type {split_type!r}; expected {SPLIT_TYPES}.")
+    directory = resolve_repo_path(dataset_dir)
+    data, hashes = {}, {}
+    for split in ("train", "val", "test"):
+        path = directory / f"{split}.csv"
+        with path.open("rb") as stream:
+            digest = sha256()
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        source = portable_path(path)
+        hashes[source] = digest.hexdigest()
+        frame = pd.read_csv(path, float_precision="round_trip")
+        if SOURCE_FILE in frame or SOURCE_ROW in frame:
+            raise ValueError(f"{path} contains reserved provenance columns.")
+        frame[SOURCE_FILE] = source
+        frame[SOURCE_ROW] = range(len(frame))
+        data[split] = frame
+    if split_type == "train_test":
+        data = {"train": pd.concat([data["train"], data["val"]], ignore_index=True), "test": data["test"]}
+    for frame in data.values():
+        frame.attrs["source_hashes"] = hashes.copy()
+    return data
 
-    Expected: three CSV files with identical schema (features + label column).
-    """
-    data_splits = {}
-    for split in ['train', 'val', 'test']:
-        data_splits[split] = pd.read_csv(f"{dataset_dir}/{split}.csv")
-    if split_type == 'train_val_test':
-        return data_splits
-    elif split_type == 'train_test':
-        combined_train = pd.concat([data_splits['train'], data_splits['val']], axis=0).reset_index(drop=True)
-        return {
-            'train': combined_train,
-            'test': data_splits['test'],
-        }
-    return {}
 
-
-def get_features_targets(data: Dict[str, pd.DataFrame], data_spec: DatasetSpec):
-    features = {split: df[data_spec.feature_cols] for split, df in data.items()}
+def get_features_targets(data, data_spec: DatasetSpec):
+    if data_spec.formulation == "boundary":
+        raise ValueError("Use load_prepared_splits for boundary data to retain maturity offsets.")
+    features = {split: prepare_features(df, data_spec)[0] for split, df in data.items()}
     targets = {split: df[data_spec.target_col] for split, df in data.items()}
     return features, targets
 
 
-def load_data_pytorch(config: TrainDEBBirthNetConfig, scaler=None):
-    # Load dataframes
-    data = load_splits(dataset_dir=config.data_dir, split_type=config.data_splits)
-    # Extract input features and targets
-    features, targets = get_features_targets(data=data, data_spec=config.data_spec)
-    # Scale and convert features to tensors
-    if scaler is None:
-        scaled_input_data, scaler = fit_and_scale_data_pytorch(features, scaling_type=config.scaling_type,
-                                                               device=config.device)
-    else:
-        scaled_input_data = scale_data_pytorch(features, scaler, device=config.device)
-    # Extract output and convert to tensors
-    targets_tensor = {split: convert_to_tensor(df.astype(float)) for split, df in targets.items()}
-
-    datasets = {}
-    dataloaders = {}
-    for split in scaled_input_data:
-        # Create dataset
-        datasets[split] = TensorDataset(
-            scaled_input_data[split],
-            targets_tensor[split]
-        )
-        # Create dataloader
-        dataloaders[split] = DataLoader(
-            datasets[split],
-            batch_size=config.batch_size if split == 'train' else 1024,
-            shuffle=True if split == 'train' else False,
-        )
-
-    return scaled_input_data, targets_tensor, dataloaders, datasets, scaler
+def load_prepared_splits(dataset_dir, data_spec: DatasetSpec, split_type="train_val_test"):
+    frames = load_splits(dataset_dir, split_type)
+    prepared = {name: prepare_split(frame, data_spec) for name, frame in frames.items()}
+    metadata = {"source_hashes": next(iter(frames.values())).attrs["source_hashes"],
+                "split_type": split_type, "rows": {name: len(p.labels) for name, p in prepared.items()},
+                "data_spec": data_spec.to_dict(),
+                "target_policy": "Recorded reached_birth; solver failures/timeouts retained"}
+    return prepared, metadata
 
 
-def load_data_gp(cfg: TrainGPConfig) -> Tuple[Dict[str, np.ndarray], Dict[str, np.ndarray]]:
-    """Load splits and return features and targets as numpy arrays for GP training.
+def load_data_pytorch(config, scaler=None):
+    from ..models.nn.data import load_data_pytorch as load
+    return load(config, scaler=scaler)
 
-    The function accepts a TrainGPConfig and extracts:
-      - dataset directory from cfg.dataset_spec.data_dir if present,
-        otherwise falls back to cfg.output_dir or current directory.
-      - uses default split type 'train_val_test'.
 
-    Returns:
-      features_np: dict[split] -> np.ndarray (float)
-      targets_np:  dict[split] -> np.ndarray (int)
-    """
-    # Try to obtain dataset directory from the DatasetSpec, then cfg.output_dir, then cwd
-    dataset_dir = cfg.data_dir
-
-    data = load_splits(dataset_dir=dataset_dir, split_type="train_val_test")
-    features, targets = get_features_targets(data=data, data_spec=cfg.data_spec)
-
-    features_np: Dict[str, np.ndarray] = {split: df.values.astype(float) for split, df in features.items()}
-
-    targets_np: Dict[str, np.ndarray] = {}
-    for split, t in targets.items():
-        arr = t.values if hasattr(t, "values") else np.asarray(t)
-        targets_np[split] = arr.astype(int).ravel()
-
-    return features_np, targets_np
+def load_data_gp(cfg):
+    from ..models.gp.data import load_data_gp as load
+    return load(cfg)

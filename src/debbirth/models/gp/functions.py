@@ -154,3 +154,31 @@ EXTENDED_FUNCTION_SET: GPFunctionSet = DEFAULT_FUNCTION_SET + (
     SQUARE,
     ATAN
 )
+
+# Stable serialization identifiers. Protected definitions above remain unchanged
+# so archived joblib programs and symbolic/MATLAB exports retain their semantics.
+PRIMITIVE_REGISTRY = {name: name for name in (
+    "add", "sub", "mul", "div", "sqrt", "log", "abs", "neg", "inv",
+    "max", "min", "sin", "cos", "tan",
+)}
+PRIMITIVE_REGISTRY.update({primitive.name: primitive for primitive in (
+    PDIV, PINV, PLOG, CBRT, SQUARE, CUBE, ATAN, BETA_43_0,
+)})
+
+
+def primitive_identifier(primitive):
+    if isinstance(primitive, str):
+        if primitive in PRIMITIVE_REGISTRY:
+            return primitive
+        if "object at 0x" in primitive:
+            raise ValueError("Historical GP function-object strings cannot reconstruct training; "
+                             "load the archived joblib model for inference instead.")
+    else:
+        for name, registered in PRIMITIVE_REGISTRY.items():
+            if primitive is registered:
+                return name
+    raise ValueError(f"Unregistered GP primitive: {primitive!r}. Register it with a stable identifier.")
+
+
+def resolve_primitive(primitive):
+    return PRIMITIVE_REGISTRY[primitive_identifier(primitive)]

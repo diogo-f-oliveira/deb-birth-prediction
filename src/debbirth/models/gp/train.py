@@ -6,11 +6,13 @@ from joblib import dump as joblib_dump, load as joblib_load
 import json
 import numpy as np
 
-from ...data.load import load_data_gp
+from .data import load_data_gp
 from .algorithm import DEBBirthSymbolicClassifier, create_gp_classifier
 from .config import TrainGPConfig
 from ...evaluate.predict import evaluate_binary_classifier
 from ...evaluate.metrics import BinaryMetrics
+from ...utils.config import validate_training_mode
+from ...utils.results import resolve_run_config, save_run_metadata
 # from .symbolic import model_program_to_sympy_strings
 
 
@@ -22,11 +24,12 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, 
         save_run: if True, create the run directory and persist artifacts (default True).
                   if False, no directory is created and nothing is saved.
     """
+    validate_training_mode(cfg)
     # Set random seeds
     np.random.seed(cfg.seed)
     random.seed(cfg.seed)
 
-    features, targets = load_data_gp(cfg)
+    features, targets, prepared, data_metadata = load_data_gp(cfg, return_prepared=True)
 
     # Assume data is already correctly formatted.
     X_train = features["train"]
@@ -41,11 +44,14 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, 
 
     # Only save artifacts when requested
     if save_run:
-        save_gp_run(model=model, cfg=cfg, val_metrics=val_metrics)
+        cfg = save_gp_run(model=model, cfg=cfg, val_metrics=val_metrics, data_metadata=data_metadata)
 
     return {
         "model": model,
         "train_config": cfg,
+        "outdir": cfg.outdir if save_run else None,
+        "prepared": prepared,
+        "data_metadata": data_metadata,
         "val_metrics": val_metrics,
         "features": features,
         "targets": targets,
@@ -55,7 +61,7 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, 
 
 
 def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_metrics: BinaryMetrics,
-                save_all_programs: bool = False) -> None:
+                save_all_programs: bool = False, data_metadata=None) -> TrainGPConfig:
     """Persist model + config + validation metrics + run details.
 
     Args:
@@ -63,10 +69,11 @@ def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_me
                          before saving to avoid storing all intermediate programs. The original
                          model object is restored after saving. If True, the model is saved as-is.
     """
-    cfg.outdir.mkdir(parents=True, exist_ok=True)
+    cfg = resolve_run_config(cfg, cfg.run_name or "DEBBirthSymbolicClassifier")
 
     # Save train config
     cfg.save_json(cfg.outdir / "train_gp_config.json")
+    save_run_metadata(cfg.outdir, cfg, data_metadata)
 
     # Save validation metrics
     val_metrics.save_json(cfg.outdir / "metrics" / "val_metrics.json")
@@ -136,6 +143,7 @@ def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_me
     if hasattr(model, "run_details_"):
         details = getattr(model, "run_details_")
         write_gp_run_history(details, cfg.outdir / "history.csv")
+    return cfg
 
 
 def write_gp_run_history(run_details: Any, path: Path) -> None:
@@ -193,7 +201,10 @@ def load_gp_run(outdir: Path) -> Dict[str, Any]:
     if cfg_path.exists():
         try:
             train_cfg_obj = TrainGPConfig.load_json(cfg_path)
-        except Exception:
+        except (ValueError, TypeError, KeyError) as exc:
+            import warnings
+            warnings.warn(f"GP model loaded for inference, but training config cannot be reconstructed: {exc}",
+                          RuntimeWarning, stacklevel=2)
             train_cfg_obj = None
 
     return {
@@ -203,54 +214,9 @@ def load_gp_run(outdir: Path) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # Run example
-    from ...data.schema import DatasetSpec
-    from .config import GPConfig
-    from .functions import *
-    from .constants import *
+    from ...utils.paths import REPO_ROOT
 
-    data_spec = DatasetSpec(
-        feature_set="dimensionless"
-    )
-    zero = GPConstant(name="c0", value=0.0)
-    gp_cfg = GPConfig(
-        generations=100,
-        population_size=1000,
-        tournament_size=190,
-        p_crossover=0.67,
-        p_hoist_mutation=0.005,
-        p_point_mutation=0.02,
-        p_subtree_mutation=0.085,
-        parsimony_coefficient=3e-4,
-        function_set=EXTENDED_FUNCTION_SET,
-        constants=EXTENDED_CONSTANT_SET + (zero,),
-        init_depth=(6, 10),
-    )
-    cfg = TrainGPConfig(
-        gp=gp_cfg,
-        data_spec=data_spec,
-        outdir=None,
-        verbose=1,
-        class_weights="balanced",
-        seed=42,
-        num_workers=12,
-    )
-    print(cfg)
-    print()
-
+    cfg = TrainGPConfig.load_json(REPO_ROOT / "experiments/gp_full_par.json")
     output = train_gp_classifier(cfg, save_run=True)
-    print("\nBest program:")
-    print(output["best_program"])
-    print("\nValidation metrics:")
-    print(output["val_metrics"])
-
-    loaded_output = load_gp_run(cfg.outdir)
-
-    test_metrics = evaluate_binary_classifier(model=loaded_output["model"], X=output['features']['test'],
-                                              y=output['targets']['test'])
-    print("\nTest metrics:")
-    print(test_metrics)
-
-    # Save test metrics in cfg/metrics/test_metrics.json
-    test_metrics_path = cfg.outdir / "metrics" / "test_metrics.json"
-    test_metrics.save_json(test_metrics_path)
+    print("Validation metrics:", output["val_metrics"])
+    print("Run directory:", output["outdir"])

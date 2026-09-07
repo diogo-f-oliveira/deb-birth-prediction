@@ -215,7 +215,9 @@ class TorchLogStandardScaler(TorchStandardScaler):
     """
 
     def _preprocess(self, X: torch.Tensor) -> torch.Tensor:
-        # Apply log transform; users must ensure X > 0
+        if not torch.isfinite(X).all() or not (X > 0).all():
+            bad = (~torch.isfinite(X) | (X <= 0)).nonzero()[:10].tolist()
+            raise ValueError(f"Log preprocessing requires finite positive inputs; invalid indices: {bad}")
         return torch.log(X)
 
     def _inverse_preprocess(self, X: torch.Tensor) -> torch.Tensor:
@@ -239,14 +241,16 @@ def fit_and_scale_data_pytorch(data, scaling_type: str, device=None):
     """
     # no scaling requested
     if scaling_type is None or scaling_type == 'none':
-        return data, None
+        target_device = resolve_device(device) if isinstance(device, str) else device
+        return {name: convert_to_tensor(values).float().to(target_device)
+                for name, values in data.items()}, None
 
     # require a mapping with 'train'
     if not hasattr(data, "get") or data.get("train", None) is None:
         raise ValueError("scale_data_pytorch requires data to be a mapping containing a 'train' split.")
 
     # normalize device argument
-    if device is not None:
+    if device is not None and not isinstance(device, torch.device):
         device = resolve_device(device)
 
     # create scaler based on requested type
@@ -299,6 +303,8 @@ def scale_data_pytorch(data, scaler: BaseScaler, device=None):
         device = resolve_device(device)
 
     # transform all splits
+    if device is not None:
+        scaler = scaler.to(device)
     scaled_data = {}
     for split_name, split_array in data.items():
         split_tensor = convert_to_tensor(split_array).float()

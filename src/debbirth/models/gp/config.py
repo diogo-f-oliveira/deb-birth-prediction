@@ -1,13 +1,16 @@
 from __future__ import annotations
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union, Mapping
 import json
 
-from .functions import DEFAULT_FUNCTION_SET, GPFunctionSet
-from .constants import GPConstantSet, DEFAULT_CONSTANT_SET
+from .functions import DEFAULT_FUNCTION_SET, GPFunctionSet, primitive_identifier, resolve_primitive
+from .constants import GPConstantSet, DEFAULT_CONSTANT_SET, resolve_constant
 from ...data.schema import DatasetSpec
-from ...utils.results import create_run_outdir
+from ...utils.paths import resolve_repo_path
+from ...utils.config import save_config_json
+from ...formulations import validate_temperature
+from ...data.load import SPLIT_TYPES
 
 
 @dataclass(frozen=True)
@@ -22,8 +25,8 @@ class GPConfig:
     # Primitives
     function_set: GPFunctionSet = DEFAULT_FUNCTION_SET
 
-    # Discrete constants: implemented as constant-valued feature columns.
-    constants: GPConstantSet = DEFAULT_CONSTANT_SET
+    # Names resolve to internal constant terminals during construction.
+    constants: GPConstantSet | Tuple[str, ...] = DEFAULT_CONSTANT_SET
 
     # Initialization
     init_depth: Tuple[int, int] = (6, 10)
@@ -42,6 +45,22 @@ class GPConfig:
     p_hoist_mutation: float = 0.01
     p_point_mutation: float = 0.01
     p_point_replace: float = 0.05
+
+
+    def __post_init__(self):
+        object.__setattr__(self, "function_set", tuple(resolve_primitive(p) for p in self.function_set))
+        object.__setattr__(self, "constants", tuple(resolve_constant(c) for c in self.constants))
+        object.__setattr__(self, "init_depth", tuple(self.init_depth))
+        if len({c.name for c in self.constants}) != len(self.constants):
+            raise ValueError("GP constant names must be unique.")
+
+    def to_dict(self):
+        from dataclasses import fields
+        result = {field.name: getattr(self, field.name) for field in fields(self)}
+        result["function_set"] = [primitive_identifier(p) for p in self.function_set]
+        result["constants"] = [c.name for c in self.constants]
+        result["init_depth"] = list(self.init_depth)
+        return result
 
 
 ClassWeight = Union[None, str, Mapping[int, float], Mapping[bool, float]]
@@ -70,50 +89,29 @@ class TrainGPConfig:
 
     seed: int = 42
     num_workers: int = 1
+    boundary_temperature: float = 1.0
+    scaling_type: str = "none"  # The historical GP path is explicitly unscaled.
 
     def __post_init__(self):
-        # Ensure data_dir is an absolute Path so trials find data regardless of CWD
-        if not isinstance(self.data_dir, Path):
-            object.__setattr__(self, "data_dir", Path(self.data_dir))
-        # If data_dir is relative, resolve it against the repository root (not the trial CWD)
-        if not self.data_dir.is_absolute():
-            # Locate repository root by finding the ancestor named 'src' and taking its parent.
-            this_file = Path(__file__).resolve()
-            repo_root = None
-            for anc in this_file.parents:
-                if anc.name == "src":
-                    repo_root = anc.parent
-                    break
-            if repo_root is None:
-                repo_root = Path.cwd()
-            resolved_data_dir = (repo_root / self.data_dir).resolve()
-        else:
-            resolved_data_dir = self.data_dir.resolve()
-
-        object.__setattr__(self, "data_dir", resolved_data_dir)
-
-        # Coerce outdir to a Path (accept strings or Paths) or create one if None
-        if self.outdir is None:
-            # build a timestamped run directory using run_name or fallback to 'DEBBirthSymbolicClassifier'
-            model_name = self.run_name if self.run_name else "DEBBirthSymbolicClassifier"
-            run_dir = create_run_outdir(model_name)
-            object.__setattr__(self, "outdir", run_dir)
-        else:
-            if not isinstance(self.outdir, Path):
-                object.__setattr__(self, "outdir", Path(self.outdir))
+        object.__setattr__(self, "data_dir", resolve_repo_path(self.data_dir))
+        if self.scaling_type != "none":
+            raise ValueError("The current GP adapter supports only scaling_type='none'.")
+        if self.outdir is not None:
+            object.__setattr__(self, "outdir", resolve_repo_path(self.outdir))
+        if self.data_splits not in SPLIT_TYPES:
+            raise ValueError(f"Unknown data_splits {self.data_splits!r}; expected {SPLIT_TYPES}.")
+        validate_temperature(self.boundary_temperature)
+        if self.data_spec.formulation != "boundary" and self.boundary_temperature != 1.0:
+            raise ValueError("boundary_temperature applies only to boundary formulations.")
 
     def save_json(self, path) -> None:
-        """Save this TrainGPConfig to a JSON file (creates parent dirs)."""
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("w", encoding="utf-8") as f:
-            json.dump(asdict(self), f, indent=2, sort_keys=True, default=str)
+        save_config_json(self, path)
 
     @classmethod
     def load_json(cls, path: Any) -> TrainGPConfig:
         """Load a TrainGPConfig from a JSON file, converting nested structures.
 
-        Returns a TrainGPConfig instance or None if loading/parsing fails.
+        Raises for malformed or unreconstructable training settings.
         """
         p = Path(path)
         raw = json.loads(p.read_text(encoding="utf-8"))
@@ -126,8 +124,10 @@ class TrainGPConfig:
         # Convert 'data_spec' dict to DatasetSpec if present
         ds = raw.get("data_spec")
         if isinstance(ds, dict):
-            raw["data_spec"] = DatasetSpec(**ds)
+            raw["data_spec"] = DatasetSpec.from_dict(ds)
 
-        # Instantiate TrainGPConfig (post-init will coerce paths)
+        if isinstance(raw.get("class_weights"), dict):
+            raw["class_weights"] = {int(key): value for key, value in raw["class_weights"].items()}
+        # Instantiate without creating a run directory
         return cls(**raw)
 

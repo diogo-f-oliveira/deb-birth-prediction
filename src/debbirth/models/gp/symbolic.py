@@ -12,7 +12,7 @@ from pathlib import Path
 import sympy as sp
 
 # New: import GP constants and build a default constants map (include all named constants)
-from .constants import EXTENDED_CONSTANT_SET
+from .constants import EXTENDED_CONSTANT_SET, resolve_constant
 
 ALL_CONSTANTS_MAP = {
     c.name: float(c.value) for c in EXTENDED_CONSTANT_SET
@@ -317,7 +317,8 @@ if __name__ == "__main__":
 
     data_spec = DatasetSpec(feature_set=cfg["data_spec"]["feature_set"])
     feature_names = data_spec.feature_cols
-    constants_map = {c["name"]: c["value"] for c in cfg["gp"]["constants"]}
+    constants = [resolve_constant(c) for c in cfg["gp"]["constants"]]
+    constants_map = {c.name: c.value for c in constants}
 
     # Simplify the program
     simplified = simplify_program(

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from typing import List, Optional, Any
 from pathlib import Path
 
 from ...data.schema import DatasetSpec
-from ...utils.results import create_run_outdir  # new import
+from ...utils.paths import resolve_repo_path
+from ...utils.config import save_config_json
+from ...formulations import validate_temperature
+from ...data.load import SPLIT_TYPES
 
 
 @dataclass
@@ -14,7 +17,7 @@ class TrainDEBBirthNetConfig:
     # Data
     data_spec: DatasetSpec
     data_splits: str = "train_val_test"  # train_val_test | train_test
-    data_dir: str = "data/processed"
+    data_dir: Path = Path("data/processed")
 
     # Training
     epochs: int = 50
@@ -37,52 +40,29 @@ class TrainDEBBirthNetConfig:
 
     # Output
     outdir: Optional[Path] = None
+    boundary_temperature: float = 1.0
 
     def __post_init__(self):
-
-        # Ensure data_dir is an absolute Path so trials find data regardless of CWD
-        if not isinstance(self.data_dir, Path):
-            object.__setattr__(self, "data_dir", Path(self.data_dir))
-        # If data_dir is relative, resolve it against the repository root (not the trial CWD)
-        if not self.data_dir.is_absolute():
-            # Locate repository root by finding the ancestor named 'src' and taking its parent.
-            this_file = Path(__file__).resolve()
-            repo_root = None
-            for anc in this_file.parents:
-                if anc.name == "src":
-                    repo_root = anc.parent
-                    break
-            if repo_root is None:
-                repo_root = Path.cwd()
-            resolved_data_dir = (repo_root / self.data_dir).resolve()
-        else:
-            resolved_data_dir = self.data_dir.resolve()
-
-        object.__setattr__(self, "data_dir", resolved_data_dir)
-
-        # If outdir was not provided, create a timestamped run dir (safe filename) under cwd.
-        if self.outdir is None:
-            model_name = "DEBBirthNet"
-            run_dir = create_run_outdir(model_name)
-            object.__setattr__(self, "outdir", run_dir)
-        else:
-            # Coerce outdir to a Path (accept strings or Paths)
-            if not isinstance(self.outdir, Path):
-                object.__setattr__(self, "outdir", Path(self.outdir))
+        object.__setattr__(self, "data_dir", resolve_repo_path(self.data_dir))
+        if self.outdir is not None:
+            object.__setattr__(self, "outdir", resolve_repo_path(self.outdir))
+        if self.data_splits not in SPLIT_TYPES:
+            raise ValueError(f"Unknown data_splits {self.data_splits!r}; expected {SPLIT_TYPES}.")
+        if self.scaling_type not in (None, "none", "standardize", "log_standardize"):
+            raise ValueError(f"Unknown scaling_type {self.scaling_type!r}.")
+        validate_temperature(self.boundary_temperature)
+        if self.data_spec.formulation != "boundary" and self.boundary_temperature != 1.0:
+            raise ValueError("boundary_temperature applies only to boundary formulations.")
 
     def save_json(self, path) -> None:
-        """Save this TrainDEBBirthNetConfig to a JSON file (creates parent dirs)."""
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("w", encoding="utf-8") as f:
-            json.dump(asdict(self), f, indent=2, sort_keys=True, default=str)
+        save_config_json(self, path)
 
     @classmethod
     def load_json(cls, path: Any) -> TrainDEBBirthNetConfig:
         """
         Load a TrainDEBBirthNetConfig from a JSON file, converting nested structures.
 
-        Returns a TrainDEBBirthNetConfig instance or None if loading/parsing fails.
+        Raises for malformed settings; no output directories are created.
         """
         p = Path(path)
 
@@ -96,7 +76,7 @@ class TrainDEBBirthNetConfig:
         # Convert 'data_spec' dict to DatasetSpec if present
         ds = raw.get("data_spec")
         if isinstance(ds, dict):
-            raw["data_spec"] = DatasetSpec(**ds)
+            raw["data_spec"] = DatasetSpec.from_dict(ds)
 
         # Instantiate TrainDEBBirthNetConfig (post-init will coerce paths)
         return cls(**raw)
@@ -117,8 +97,4 @@ class DEBBirthNetConfig:
             raise ValueError(f"threshold must be between 0 and 1 (exclusive), got {self.threshold}")
 
     def save_json(self, path) -> None:
-        """Save this DEBBirthNetConfig to a JSON file (creates parent dirs)."""
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        with p.open("w", encoding="utf-8") as f:
-            json.dump(asdict(self), f, indent=2, sort_keys=True, default=str)
+        save_config_json(self, path)

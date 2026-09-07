@@ -106,7 +106,6 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
     )
     # Run training (this may be slow depending on population/generations).
     output = train_gp_classifier(train_cfg, save_run=save_run)
-    output['train_config'] = train_cfg
     val_metrics = output.get("val_metrics")
 
     # Report the CV R2 score to Ray Tune

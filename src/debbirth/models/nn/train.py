@@ -11,15 +11,18 @@ import torch
 
 from .structure import DEBBirthNet
 from .config import TrainDEBBirthNetConfig, DEBBirthNetConfig
-from ...data.load import load_data_pytorch
+from .data import load_data_pytorch
 from ...data.scalers import save_scaler, TorchStandardScaler, load_scaler
 from ...evaluate.metrics import compute_pos_weight, EpochBinaryMetrics
 from ...evaluate.predict import evaluate_pytorch_binary_classifier
 from ...utils.pytorch import set_seed, resolve_device
+from ...utils.config import validate_training_mode
+from ...utils.results import resolve_run_config, save_run_metadata
 
 
 def save_run_results(cfg: TrainDEBBirthNetConfig, history: List[EpochBinaryMetrics], model: torch.nn.Module,
-                     scaler: TorchStandardScaler) -> None:
+                     scaler: TorchStandardScaler | None, data_metadata=None) -> TrainDEBBirthNetConfig:
+    cfg = resolve_run_config(cfg, "DEBBirthNet")
     outdir = Path(cfg.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -57,10 +60,16 @@ def save_run_results(cfg: TrainDEBBirthNetConfig, history: List[EpochBinaryMetri
 
     # save config as JSON
     cfg.save_json(cfg.outdir / "train_nn_config.json")
+    save_run_metadata(cfg.outdir, cfg, data_metadata)
 
     # save scaler using scaler-native saver
     scaler_path = model_dir / "scaler.pth"
-    save_scaler(scaler, scaler_path)
+    if scaler is not None:
+        save_scaler(scaler, scaler_path)
+    elif scaler_path.exists():
+        # An explicit reused run directory must not retain a previous scaler.
+        scaler_path.unlink()
+    return cfg
 
 
 def load_trained_nn(outdir: Any, device: Any = None) -> Dict[str, Any]:
@@ -122,10 +131,14 @@ def load_trained_nn(outdir: Any, device: Any = None) -> Dict[str, Any]:
 
 
 def train_net(cfg: TrainDEBBirthNetConfig, save: bool = False) -> Dict[str, Any]:
+    validate_training_mode(cfg)
+    if cfg.net_config is None or cfg.net_config.input_dim != cfg.data_spec.n_features:
+        raise ValueError("net_config.input_dim must match data_spec.n_features.")
     set_seed(cfg.seed)
     device = resolve_device(cfg.device)
 
-    scaled_input_data, targets, dataloaders, datasets, scaler = load_data_pytorch(cfg)
+    scaled_input_data, targets, dataloaders, datasets, scaler, prepared, data_metadata = load_data_pytorch(
+        cfg, return_prepared=True)
 
     # -------------------------
     # Model
@@ -185,12 +198,16 @@ def train_net(cfg: TrainDEBBirthNetConfig, save: bool = False) -> Dict[str, Any]
 
     # Save outputs: CSV history, last epoch metrics JSON, and model + scaler
     if save:
-        save_run_results(cfg, history, model, scaler)
+        cfg = save_run_results(cfg, history, model, scaler, data_metadata=data_metadata)
 
     # Pack and return
     return {
         "model": model,
         "history": history,
+        "train_config": cfg,
+        "outdir": cfg.outdir if save else None,
+        "prepared": prepared,
+        "data_metadata": data_metadata,
         "val_metrics": history[-1],
         "scaled_input_data": scaled_input_data,
         "targets": targets,
@@ -201,52 +218,9 @@ def train_net(cfg: TrainDEBBirthNetConfig, save: bool = False) -> Dict[str, Any]
 
 
 if __name__ == "__main__":
-    # Run example
-    from ...data.schema import DatasetSpec
-    from .config import DEBBirthNetConfig
+    from ...utils.paths import REPO_ROOT
 
-    data_spec = DatasetSpec(
-        feature_set="dimensionless"
-    )
-    net_config = DEBBirthNetConfig(
-        hidden_dims=[32, 32, 32],
-        dropout=0.2,
-        input_dim=data_spec.n_features,
-    )
-    cfg = TrainDEBBirthNetConfig(
-        data_spec=data_spec,
-        data_dir="data/processed/",
-        epochs=100,
-        batch_size=64,
-        lr=1e-4,
-        weight_decay=1e-3,
-        net_config=net_config,
-        scaling_type='log_standardize',
-        use_pos_weight=True,
-        seed=42,
-        num_workers=4,
-        device="cpu",
-    )
+    cfg = TrainDEBBirthNetConfig.load_json(REPO_ROOT / "experiments/nn_full_par.json")
     output = train_net(cfg, save=True)
-    print("Validation metrics:")
-    print(output["val_metrics"])
-
-    loaded_output = load_trained_nn(outdir=cfg.outdir, device=cfg.device)
-
-    print(loaded_output['scaler'].fitted_, loaded_output['scaler'].mean_, loaded_output['scaler'].var_)
-
-    test_metrics, test_loss = evaluate_pytorch_binary_classifier(
-        model=loaded_output["model"],
-        dataloader=output["dataloaders"]["test"],
-        loss_fn=torch.nn.BCEWithLogitsLoss(
-            pos_weight=torch.tensor(cfg.pos_weight) if cfg.use_pos_weight and cfg.pos_weight is not None else None
-        ),
-        device=resolve_device(cfg.device)
-    )
-    print("\nTest metrics:")
-    print(test_metrics)
-
-    # Save test metrics in cfg/metrics/test_metrics.json
-    test_metrics_path = cfg.outdir / "metrics" / "test_metrics.json"
-    # use dataclass save helper
-    test_metrics.save_json(test_metrics_path)
+    print("Validation metrics:", output["val_metrics"])
+    print("Run directory:", output["outdir"])
