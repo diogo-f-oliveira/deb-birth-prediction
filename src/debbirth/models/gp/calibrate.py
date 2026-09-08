@@ -179,10 +179,13 @@ def hyperopt_calibration(search_space: Dict[str, Any],
                                               report_metrics=False, verbose=True, num_workers=-1)
 
     if save_best_model:
-        save_gp_run(
+        saved_cfg = save_gp_run(
             model=best_model_train_output['model'],
             cfg=best_model_train_output['train_config'],
-            val_metrics=best_model_train_output['val_metrics'])
+            val_metrics=best_model_train_output['val_metrics'],
+            data_metadata=best_model_train_output['data_metadata'])
+        best_model_train_output['train_config'] = saved_cfg
+        best_model_train_output['outdir'] = saved_cfg.outdir
 
     if evaluate_on_test:
         test_metrics = evaluate_binary_classifier(
