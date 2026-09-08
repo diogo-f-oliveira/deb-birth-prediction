@@ -18,7 +18,7 @@ Both archived models use four dimensionless inputs, in this order:
 
 The target is `reached_birth`: `True` / `1` indicates that birth is reached; `False` / `0` indicates that it is not reached according to the dataset labels.
 
-Shared data preparation now supports three formulations: **full-parameter** (`full_par`), **normalized** (`normalized`), and **critical boundary** (`boundary`). Their learned features are `(g, k, v_Hb, f)`, `(gamma, k, nu_b)`, and `(gamma, k)`, respectively. Boundary preparation carries `log_nu_b` separately from the learned features. See [formulations and data preparation](docs/formulations_and_data.md) for interfaces, configuration, and T03 validation results. Boundary training and the new model pilots remain subsequent tasks.
+Shared data preparation now supports three formulations: **full-parameter** (`full_par`), **normalized** (`normalized`), and **critical boundary** (`boundary`). Their learned features are `(g, k, v_Hb, f)`, `(gamma, k, nu_b)`, and `(gamma, k)`, respectively. Boundary preparation carries `log_nu_b` separately from the learned features. See [formulations and data preparation](docs/formulations_and_data.md) for interfaces, configuration, and T03 validation results. [T04's GP backend decision](docs/gp_backend_decision.md) selects gplearn and records a working normalized/boundary prototype; production boundary training remains T05/T06.
 
 ## Repository structure
 

@@ -1,6 +1,6 @@
 # Development tasks
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Objective
 
@@ -17,9 +17,9 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 - Use conda `debbirth` for code execution. Prefer direct scientific checks and small experiments over new test files. Do not create package infrastructure or a general experiment framework just to complete this backlog.
 - This file is a development plan, not a request to start every experiment now. Execute the scope of the active user request; no background scheduling is implied.
 
-**Current task:** None. T01-T02 are complete. T03's shared foundation is implemented, with a reopened tuning-save regression; the new-model pilots remain ahead.
+**Current task:** None. T01-T04 are complete; T04 selected gplearn and verified a boundary prototype.
 
-**Next action:** Correct and verify the T03 best-model saving regression, then proceed to T04. T05 can use the implemented T03 interfaces independently. JSON-based tuning integration is tracked separately in T08B, before T09.
+**Next action:** T05 in backlog order; T06 is also ready and will use gplearn for normalized/boundary GP. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
 
 ## Model comparison
 
@@ -56,7 +56,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
 ### T03 - Separate formulations, data preparation, and configuration
 
-- [ ] **TODO (reopened)** | Dependencies: T02. Shared foundation completed; only the regression follow-up below remains.
+- [x] **DONE** | Dependencies: T02. Shared foundation and regression follow-up verified.
 - Extend the data/schema path with explicit formulation names and feature order. Keep the full-parameter `(g, k, v_Hb, f)` behavior intact.
 - Introduce a small formulation module (for example `src/debbirth/formulations.py`) that explicitly separates learned output, boundary margin, and probability. Share the mathematical definitions across GP and NN without forcing their training loops or array backends into one abstraction.
 - Separate CSV/split loading and shared feature preparation from NN tensor conversion, device placement, and batching. Shared data preparation should not import model training configurations. Carry labels, source-row identity, and boundary offsets together through selection and shuffling.
@@ -69,15 +69,17 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 - **Result (2026-09-06):** Added `full_par`/`normalized`/`boundary` schemas, shared preparation and output semantics, aligned provenance/offset records, family adapters, pure config/path handling, registered GP serialization, and JSON experiment settings. `docs/formulations_and_data.md` records interfaces and actual checks. Both new representations prepared all 199,989 supplied rows. Direct equivalence/alignment/scaling/config checks and tiny full-parameter GP/NN save/load runs passed, including NN without scaling. Archived predictions and supplied data/model hashes are unchanged. Artifacts and the session check script are under `results/runs/t03_validation/`; its summary identifies the GP run. Boundary training and the new-model pilots remain T04-T06; CPU only was validated.
 
 - **Follow-up (2026-09-07):** At the user's request, GP JSON now selects constants by name only. `CONSTANT_REGISTRY` in `models/gp/constants.py` supplies values. Updated the example, serializer, symbolic example, and documentation; direct checks covered all registry values, JSON round-trip without directory creation, invalid/duplicate/conflicting entries, runtime constant columns, archived predictions, and symbolic substitution. No training or artifact migration was needed.
-- **Regression follow-up (2026-09-07, TODO):** In `src/debbirth/models/gp/calibrate.py`, the best-model saving branch ignores the resolved config returned by `save_gp_run`, leaving the returned config's `outdir` unset and causing subsequent test-metric saving to fail. Capture and return the resolved config/output path and pass the available data metadata when saving. Verify saved-best runs with and without explicit test evaluation, provenance in the saved metadata, and unchanged unsaved behavior using a tiny check. This is a T03 correction; do not defer it to T08B. Restore `DONE` after that correction is verified; the earlier foundation checks remain valid.
+- **Regression follow-up (reported 2026-09-07; resolved 2026-09-08):** `src/debbirth/models/gp/calibrate.py` now retains the resolved config/output path returned by `save_gp_run` and passes the selected run's data metadata. A direct check exercised all four combinations of saving and explicit test evaluation with a real GP model (population 16, one generation): paths/configs, conditional metric files, provenance, reload predictions, and unsaved behavior passed. The actual finalization function was executed from source with simulated search orchestration/results because Ray and HyperOpt are absent from `debbirth`; no end-to-end search is claimed. Probe, summary, and selected run paths: `results/runs/t03_save_validation/`. The earlier foundation checks remain valid; JSON-based tuning integration remains T08B.
 
 ### T04 - Choose the GP implementation approach
 
-- [ ] **TODO** | Dependencies: T01; T03 for a small end-to-end prototype.
+- [x] **DONE** | Dependencies: T01; T03 for a small end-to-end prototype.
 - Inspect the installed gplearn implementation and current wrapper. Determine separately whether it supports the normalized classifier and the boundary classifier cleanly.
 - Prototype the boundary fitness: a tree receives only `(gamma, k)` or their permitted transforms; the fitness uses row-aligned labels and `log_nu_b` in weighted BCE of `(F - log_nu_b)/T`, plus parsimony. Check how subsampling, parallel evaluation, prediction, and saving preserve this alignment.
 - Reject approaches that allow maturity into the evolved tree, hide it in the target labels, or depend on fragile implicit row order. Evaluate a small custom extension versus DEAP or another suitable backend if gplearn's interfaces are insufficient.
 - **Done when:** a short decision note names the chosen backend(s), explains the tradeoff, and links a working minimal boundary-fitness experiment. Preserve the existing gplearn benchmark without building a general backend abstraction.
+- **Result (2026-09-08):** `docs/gp_backend_decision.md` recommends gplearn for all formulations and compares DEAP/PySR benefits and costs. `src/debbirth/models/gp/boundary_prototype.py` uses a raw-output SymbolicRegressor engine with binary labels and separately bound weighted BCE offsets, guarded by an audited backend source contract. `experiments/prototype_gp_boundary.py` passed in `debbirth` on matched 512/128 training/validation rows: serial/two-process agreement, full/65% sample masks, explicit raw/OOB/parsimony recomputation, record shuffling/repeated coordinates, strict ties, monotonicity, scaling and fresh-process reload. Results: `results/runs/2026-09-08T15-45-43-866373_t04_gp_backend/`. No test-set use, dependency installation, full tuning or production integration. T06 must integrate the adapter, intended primitives/constants, exports and explicit final-program selection; gplearn's final selection uses raw loss despite parsimony in tournaments.
+- **Documentation follow-up (2026-09-08):** Expanded the decision note with the threshold-to-log-margin representation, sigmoid probability, Bernoulli-to-stable-BCE derivation, class weights/sample masks, parsimony, a worked maturity example and the explicit gplearn metric binding. Confirmed reuse of the existing `full_par` training/tuning as the historical benchmark; matched-budget retraining would be a separate experimental choice. Checked equations against the prototype and reviewed the content/diff; no code or model runs changed.
 
 ### T05 - Implement normalized and boundary neural networks
 
@@ -93,7 +95,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 ### T06 - Implement normalized and boundary GP models
 
 - [ ] **TODO** | Dependencies: T03 and T04.
-- Implement both formulations using the selected approach. For the boundary model, evolve `F(gamma, k)` with the fixed offset outside the tree and a documented positive training temperature.
+- Implement both formulations with gplearn as selected in T04 (`docs/gp_backend_decision.md`). For the boundary model, evolve `F(gamma, k)` with the fixed offset outside the tree and a documented positive training temperature. Integrate the prototype's explicit row/mask contract; keep loss normalization and final-program selection separate from tournament parsimony, documenting any change from gplearn's last-generation raw-loss selection.
 - Define the new primitive set without `max`, square root, inversion, or negation; retain historical primitive definitions for old artifacts. Include optional `x_b`; document protected operations and constant choices.
 - Save sufficient settings and the raw expression to reproduce inference. Export readable expressions with the actual feature names and full original-variable feasibility rule, including normalization and `exp(F)` where applicable.
 - Keep historical gplearn class/module import paths and primitive definitions available for loading archived artifacts. Confine backend-specific evolution and serialization to the GP implementation; analysis code should not need to access gplearn private attributes.
@@ -158,7 +160,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - Preserve matched data/subset identities and use validation data for selection. Follow T08 for training-temperature searches versus post-training calibration; held-out test evaluation stays explicit and separate from the search.
 - Save the base configuration, search specification/script identity, search seed/budget/objective, sampled trial parameters, and fully resolved ordinary training JSON for each trial. The selected run must retain its resolved output path, model/scaler state, metrics, and data/code provenance and be reproducible without invoking the tuner.
 - **Done when:** tiny GP and NN tuning runs exercise fixed settings, sampled overrides, dependent parameters, and named constant/function choices as applicable; selected artifacts reload consistently, and a selected run can be reproduced from its saved training JSON with matching data and seed. Record actual commands, resolved configurations, and validation results without full tuning or a new test framework.
-- **Current gap (2026-09-07):** The existing GP tuner constructs configs independently of the JSON examples, uses hardcoded named function/constant sets, and ignores extra GP configuration overrides. No JSON-based tuning integration or end-to-end tuning verification is claimed yet. The best-model saving regression is tracked under T03 rather than postponed here.
+- **Current gap (2026-09-07):** The existing GP tuner constructs configs independently of the JSON examples, uses hardcoded named function/constant sets, and ignores extra GP configuration overrides. No JSON-based tuning integration or end-to-end tuning verification is claimed yet. The best-model saving regression was corrected separately under T03 on 2026-09-08.
 
 ### T09 - Train, tune, and compare the models
 
@@ -217,3 +219,6 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - **2026-09-06:** Completed T03 using the user-selected `full_par` name, JSON experiment settings, and explicit rejection of validation-free training. Shared preparation preserves row identity and maturity offsets; configs no longer create directories and GP settings are reconstructable by named primitives. Direct checks and small GP/NN runs passed in `debbirth`; see `docs/formulations_and_data.md` and `results/runs/t03_validation/summary.json`. No new-model tuning, GP backend migration, solver work, or data relabeling was performed.
 - **2026-09-07:** Replaced GP name/value JSON constants with registered names only. Old entries remain readable only when matching the registry; new saves always use names. Direct validation passed, with archived GP inference unchanged.
 - **2026-09-07:** Added T08B for base-JSON plus sampled-override tuning integration and made it a dependency of T09. Reopened T03 narrowly for the best-model saving path/provenance regression found during tuning-code inspection. Preserved the completed shared-foundation results. This update changes the backlog only; neither the regression fix nor tuning integration has been implemented or run.
+- **2026-09-08:** Completed the T03 regression correction: selected-model saving returns its resolved config/path and retains data provenance. Four save/test-evaluation combinations passed direct checks with a tiny real GP model; saved models reloaded with identical predictions. Ray/HyperOpt are absent, so search orchestration/results were simulated while executing the actual finalization function. No dependencies were installed, and no full search, source-data changes, or archived-artifact changes were made. T03 is DONE; T08B remains TODO.
+- **2026-09-08:** Completed T04 with gplearn as the priority and selected backend for all formulations. A small normalized classifier and fixed-offset boundary prototype trained and reloaded successfully; boundary sample-mask, parallelism and alignment checks passed. `docs/gp_backend_decision.md` records the experiment, the private fitness/source dependency, final-selection/parsimony distinction, and the conditional benefits of DEAP/PySR. Production GP integration remains T06; no backend migration, data relabeling or test-set evaluation was performed.
+- **2026-09-08:** User accepted the gplearn recommendation and requested a clearer boundary explanation. Expanded `docs/gp_backend_decision.md` with the representation/loss derivation and its mapping to the implemented fitness. Existing `full_par` artifacts/tuning remain reusable without a backend-driven rerun; comparisons must disclose historical protocol differences. Documentation-only follow-up; T04 remains DONE.
