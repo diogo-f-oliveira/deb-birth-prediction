@@ -7,7 +7,7 @@ Develop accurate, fast, and interpretable surrogates for birth feasibility in st
 Read these sources before making scientific or architectural changes:
 
 - `README.md`: current implementation, data workflow, and archived model usage.
-- `docs/Will it be born CONTRLO26 paper.pdf`: accepted paper and historical experimental methodology; the filename is intentional.
+- `docs/Will it be born CONTROLO26 paper.pdf`: accepted paper and historical experimental methodology.
 - `docs/birth_equations.md`: derivation and notation for the new representations.
 - `docs/next_steps.md`: the research direction and proposed experiments.
 - `TASKS.md`: the actionable backlog, dependencies, completion criteria, and current progress. Read it at the start of development work and update the relevant task and progress log before ending a work session. Follow the active user request rather than automatically executing the entire backlog.
