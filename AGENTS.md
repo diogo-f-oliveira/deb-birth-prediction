@@ -106,6 +106,14 @@ conda run -n debbirth python -m src.debbirth.models.nn.train
 
 These load `experiments/gp_full_par.json` and `experiments/nn_full_par.json`, train, validate, and save artifacts; use deliberately small configurations for smoke checks. Their example settings are not necessarily the archived paper settings. Both trainers require `train_val_test`; `train_test` is an explicit loader-only merge. NN and GP boundary training are implemented (`experiments/gp_normalized.json`, `experiments/gp_boundary.json`; small GP validation runs use `conda run -n debbirth python -m experiments.validate_gp_formulations`). Untuned NN examples are `experiments/nn_normalized.json` and `experiments/nn_boundary.json`; small validation runs use `conda run -n debbirth python -m experiments.validate_nn_formulations`. Notebook relative paths generally assume `notebooks/` as the working directory while imports need the repository root on the Python path.
 
+The shared training CLI (T08A) is `conda run -n debbirth python -m src.debbirth.train --model {gp,nn} --formulation {full_par,normalized,boundary} [--config ...]`. It is a thin wrapper around `train_gp_classifier`/`train_net`. Keep training logic in those functions.
+- **Overrides.** Only runtime and identity settings: seed, data directory, outdir, run name, workers, and NN device. Hyperparameters, including temperature, stay in config JSON.
+- **Output directory.** A config's `outdir` is ignored unless `--outdir` is passed, so a saved `train_*_config.json` reproduces a run in a new directory.
+- **Fail-fast checks.** Invalid family/config/formulation combinations fail before data loading.
+- **Test data.** The CLI never evaluates the test split.
+
+NN configs, like GP configs, accept `run_name`. The NN default run directory suffix is `DEBBirthNet`, or `DEBBirthBoundaryNet` for boundary runs.
+
 This is a research repository, not a software package. Tests are usually unnecessary: do not create test files, expand a test suite, or introduce testing infrastructure by default. Prefer a small direct calculation, an existing notebook, a short smoke run, or inspection of experimental results when validation is useful. Add an automated test only when it has clear value for a consequential, otherwise difficult-to-detect error, or when the user requests it.
 
 Choose scientific checks relevant to the change rather than treating these as a mandatory checklist: scaling invariance, the `k=1` boundary, strict boundary behavior, finite extreme-range outputs, decreasing boundary-model feasibility with increasing maturity, or save/load prediction agreement. Verify exported GP expressions against runtime predictions when changing primitives or exports. Report what was actually checked and any limitations. Documentation-only edits need a content/diff check, not code execution or model training.

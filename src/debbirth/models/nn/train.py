@@ -32,7 +32,8 @@ def save_run_results(cfg: TrainDEBBirthNetConfig, history: List[EpochBinaryMetri
     selected = next((row for row in history if row.epoch == selected_epoch), None)
     if selected is None:
         raise ValueError("Selected epoch is missing from history.")
-    cfg = resolve_run_config(cfg, "DEBBirthNet")
+    default_name = "DEBBirthBoundaryNet" if cfg.data_spec.formulation == "boundary" else "DEBBirthNet"
+    cfg = resolve_run_config(cfg, cfg.run_name or default_name)
     outdir = Path(cfg.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 

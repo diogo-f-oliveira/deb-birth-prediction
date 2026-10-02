@@ -164,7 +164,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
   **Follow-up (2026-10-02, user-approved):** `TrainGPConfig` now rejects `class_weights` other than `None`, `"balanced"` or a mapping of both classes to finite positive weights. NN configs reject a `pos_weight` set while `use_pos_weight` is false. A direct check confirmed the valid/legacy settings, the rejections, and that all shipped and saved configs load as before. The exceptions are the archived/January GP configs with historical function-object strings, an unchanged limitation; their models still load via `load_gp_run`.
 
-  Unweighted loss changes the loss scale relative to parsimony, so earlier tuned values do not transfer automatically. The T04 prototype still balances internally as historical evidence; the T06 production trainer must not. No CLI exists yet (T08A), and JSON-based tuning remains T08B.
+  Unweighted loss changes the loss scale relative to parsimony, so earlier tuned values do not transfer automatically. The T04 prototype still balances internally as historical evidence; the T06 production trainer must not. The T08A CLI loads the same JSON configs and applies no weighting override. JSON-based tuning remains T08B.
 
 ### T06D - Make GP symbolic exports agree with runtime semantics
 
@@ -198,19 +198,36 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
 ### T08A - Add a small shared training CLI
 
-- [ ] **TODO (proposed)** | Dependencies: T03, T05, and T06; use T08 for full-experiment configurations.
-- Provide one repository-root module entry point for training, backed by the same Python functions used in notebooks. A proposed interface is `python -m src.debbirth.train`; this module and the example config below do not exist yet.
+- [x] **DONE** | Dependencies: T03, T05, and T06; use T08 for full-experiment configurations.
+- Provide one repository-root module entry point for training, backed by the same Python functions used in notebooks: `python -m src.debbirth.train`.
 - Use a small standard-library argument parser. Expose model family (`gp`/`nn`), formulation (`full_par`/`normalized`/`boundary`), an experiment config file, and a few common overrides such as seed, data directory, output directory, and device/workers where applicable. Keep detailed architecture, primitive sets, and search settings in the config file rather than creating a flag for every parameter.
 - Define precedence explicitly: defaults, then config, then explicitly supplied CLI overrides. Validate family/formulation compatibility and inputs before expensive work. Save the fully resolved config and invocation with the run and print the output directory and validation summary.
 - A training invocation should fit and validate one run. Keep held-out test evaluation explicit and separate from routine training/tuning. Leave experiment grids and hyperparameter search to simple scripts calling the same training functions initially.
 - Preserve callable training functions and historical entry points where practical. Do not require installation as a package, add orchestration infrastructure, or implement CLI-only training logic.
 - **Done when:** help is useful, a small NN run and a small GP run can each be launched and reproduced from a saved configuration through the CLI, and invalid combinations fail clearly before training. Document actual commands in `README.md`.
 
-Proposed command, to be documented as working only after implementation:
+Working command:
 
 ```text
 conda run -n debbirth python -m src.debbirth.train --model nn --formulation boundary --config experiments/nn_boundary.json --seed 42
 ```
+
+- **Result (2026-10-02):** Implemented `src/debbirth/train.py`. It is an argparse wrapper around `train_gp_classifier` / `train_net` with no training logic of its own.
+  - **Inputs and precedence.** `--config` defaults to `experiments/<model>_<formulation>.json`. Precedence is defaults → config → explicit flags.
+  - **Overrides.** Runtime and identity settings only: `--seed`, `--data-dir`, `--outdir`, `--run-name`, `--num-workers`, and `--device` (NN only). At the user's direction, hyperparameters including `boundary_temperature` stay in config files.
+  - **Output directory.** At the user's direction, the CLI treats a config's `outdir` as provenance: each run gets a fresh directory unless `--outdir` names a new or empty one.
+  - **Dry run and record.** `--dry-run` resolves and prints without loading data. Each run writes `cli_invocation.json` (argv, config path and sha256, overrides, reproduce command) next to the trainer's usual files.
+  - **NN `run_name`.** NN configs now accept `run_name`, matching GP. The default directory suffix is `DEBBirthBoundaryNet` for boundary runs and `DEBBirthNet` otherwise. Old NN configs load with `None`; the archived model and a January run reload and predict finitely. The field is not used by model construction.
+  - **Checks run in `debbirth`:**
+    - `--help` reads correctly.
+    - Nine invalid invocations exit with code 2 and a clear message before data loading, with no new run directory. The cases were: GP/NN config under the wrong family (both directions), formulation mismatch, `--device` with GP, temperature on a normalized config, NN `input_dim` mismatch, missing config, non-empty `--outdir`, and an unknown formulation.
+    - Dry runs of all six shipped configs resolve, with overrides visible in the printed config.
+    - The GP path does not import torch.
+  - **Small real runs** on the full splits, with `--seed 7` and scratch configs derived from `gp_boundary.json` (population 100, 3 generations, tournament 10, 1 worker) and `nn_boundary.json` (2 epochs, CPU):
+    - Original runs: `results/runs/2026-10-02T18-00-29-879113_t08a_cli_gp/` and `2026-10-02T18-00-44-294086_DEBBirthBoundaryNet/`.
+    - Reproductions through `--config <run>/train_*_config.json`: `2026-10-02T18-01-07-652664_t08a_cli_gp/` and `2026-10-02T18-01-22-517688_t08a_cli_nn_repro/`.
+    - The reproductions gave an identical GP program, identical NN state dict and checkpoint, equal validation metrics, and identical reloaded validation predictions and probabilities for both families.
+    - No test-split evaluation was performed.
 
 ### T08B - Integrate experiment configurations with hyperparameter tuning
 
@@ -234,7 +251,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ### T09 - Train, tune, and compare the models
 
-- [ ] **TODO** | Dependencies: T08, T08B, T06A, T06B, and T06C; use T08A for command-line execution once implemented.
+- [ ] **TODO** | Dependencies: T08, T08B, T06A, T06B, and T06C; T08A's CLI (`python -m src.debbirth.train`) is available for command-line execution.
 - Before final training/tuning, confirm T06B and T06C are complete and inspect resolved configs for the revised GP set, feature schema, and disabled class weighting. Earlier pilot runs do not satisfy this prerequisite.
 - Run the agreed experiments in distinct run directories. Record configurations, seeds, timing, model size/expression complexity, training history, and selected artifacts. Keep interrupted or failed runs identifiable.
 - Freeze model choices using validation results, then evaluate the test split. Produce a consolidated table with macro-F1, MCC, per-class precision/recall, confusion counts, AUROC/AP, and probability quality where relevant.
@@ -281,6 +298,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ## Progress and decisions
 
+- **2026-10-02:** Completed T08A: shared training CLI `python -m src.debbirth.train`, with `cli_invocation.json` records. Per the user: hyperparameters stay in configs, and a config's outdir is provenance (fresh run directory unless `--outdir`). Added NN `run_name` for parity with GP. Small GP/NN boundary runs reproduced exactly from their saved configs.
 - **2026-10-02:** Completed T06A: shared `ParameterPredictor` with `NNPredictor`/`GPPredictor`, one-pass GP validation, and coordinate-aware plotting (normalized axes, critical curves/surfaces, verified slices). Run: `results/runs/2026-10-02T17-07-29-933074_t06a_validation/`.
 - **2026-10-02:** Completed T06: production boundary GP engine (`boundary.py`), normalized/boundary training through `train_gp_classifier`, exact `expression.txt` with original-variable rules; validation run `results/runs/2026-10-02T16-55-47-145588_t06_gp_validation/`. Simplified exports stay with T06D.
 - **2026-10-02:** Completed T06C (unweighted defaults; weighted configs kept as `*_balanced`/`*_pos_weight`) and T06B (revised function set and `gp_normalized`/`gp_boundary` configs with `x_b`) before T06, so T06 pilots use final settings. Decided that GP final-program selection stays at the last generation (generations are tuned); added T08C for alternative policies. Moved export-semantics agreement from T06B to the new T06D after reverting an out-of-scope `symbolic.py` change. Validation run: `results/runs/2026-10-02T16-16-03-355538_t06bc_validation/`.

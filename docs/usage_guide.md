@@ -1,6 +1,6 @@
 # Usage guide: training, loading and using the models
 
-This guide explains how the code is organised after T03–T06C and walks through each of the six model combinations step by step. It describes the code as of 2026-10-02. For derivations see `birth_equations.md`; for interface details and validation records see `formulations_and_data.md`, `nn_formulations.md` and `gp_formulations.md`.
+This guide explains how the code is organised after T03–T06C and T08A and walks through each of the six model combinations step by step. It describes the code as of 2026-10-02. For derivations see `birth_equations.md`; for interface details and validation records see `formulations_and_data.md`, `nn_formulations.md` and `gp_formulations.md`.
 
 All commands run from the repository root in the `debbirth` conda environment:
 
@@ -59,6 +59,7 @@ PreparedSplit  (one per split, rows kept aligned)                 data/prepare.p
 | Metrics | `src/debbirth/evaluate/predict.py`, `metrics.py` | `metrics_from_predictions`, `BinaryMetrics` (now with MCC, log loss, Brier) |
 | Plots | `src/debbirth/plot/boundary.py` | Original or normalized axes, critical curves and surfaces |
 | Experiment settings | `experiments/*.json` | One JSON per model; validation scripts alongside |
+| Training CLI | `src/debbirth/train.py` | `python -m src.debbirth.train --model … --formulation …` (T08A) |
 
 The main behavioural changes:
 
@@ -153,6 +154,20 @@ Use the same `rows` for every model you compare. Pass `data_metadata={...}` to t
 
 Each training call below uses `prepared=subset(...)` and small settings so that it finishes in seconds. For a real run, drop `prepared=` (the full splits are then loaded) and the size overrides.
 
+**From the command line.** Any of the six models can be trained on the full configured splits with the shared CLI (T08A). It calls the same trainers:
+
+```text
+conda run -n debbirth python -m src.debbirth.train --model gp --formulation boundary --seed 42
+conda run -n debbirth python -m src.debbirth.train --model nn --formulation normalized --device cpu --run-name nn_norm
+```
+
+- **Config.** `--config` defaults to `experiments/<model>_<formulation>.json`.
+- **Overrides.** Only runtime and identity settings: `--seed`, `--data-dir`, `--outdir`, `--run-name`, `--num-workers`, and `--device` (NN only). Hyperparameters, including temperature, stay in the config.
+- **Dry run.** `--dry-run` validates and prints the resolved config without loading data.
+- **Output directory.** A config's `outdir` is ignored; each run gets a new directory unless `--outdir` names a new or empty one.
+- **Reproducing a run.** Use `--config results/runs/<run>/train_*_config.json`. `cli_invocation.json` in each CLI run records the exact command.
+- **Not available from the CLI.** Prepared subsets and test evaluation stay in Python.
+
 ### 5.1 GP, full-parameter (historical benchmark)
 
 1. **Train with the module entry point** (full data, settings from `gp_full_par.json`, saves a run):
@@ -175,7 +190,7 @@ Each training call below uses `prepared=subset(...)` and small settings so that 
    ```
 
 3. **Inspect the run directory** `results/runs/<timestamp>_DEBBirthSymbolicClassifier/`:
-   - `train_gp_config.json`, `run_metadata.json` (data hashes, loss, decision rule, selection policy, versions, code hashes);
+   - `train_gp_config.json`, `run_metadata.json` (data hashes, loss, decision rule, selection policy, versions, code hashes), and `cli_invocation.json` when launched from the CLI;
    - `metrics/val_metrics.json`, `history.csv`;
    - `model/gp_model.joblib`, `model/best_program.txt`, `model/expression.txt`.
 
@@ -238,8 +253,8 @@ To reproduce the historical balanced setting, use `gp_full_par_balanced.json`. T
    print(out["outdir"], out["selected_epoch"], out["val_metrics"].f1_macro)
    ```
 
-3. **Inspect the run directory** `results/runs/<timestamp>_DEBBirthNet/`:
-   - `train_nn_config.json`, `run_metadata.json`, `checkpoint.json` (selection rule and epoch);
+3. **Inspect the run directory** `results/runs/<timestamp>_<run_name>/`. The default name is `DEBBirthNet`, or `DEBBirthBoundaryNet` for boundary runs; set `run_name` in the config to change it. The directory contains:
+   - `train_nn_config.json`, `run_metadata.json`, `checkpoint.json` (selection rule and epoch), and `cli_invocation.json` when launched from the CLI;
    - `history.csv` (per epoch), `metrics/val_metrics.json` (selected epoch);
    - `model/model_state_dict.pth`, `model/scaler.pth` (absent when `scaling_type="none"`).
 4. **Load and predict** (section 6). The saved scaler is applied automatically.
@@ -392,6 +407,5 @@ All use sampled train/validation rows, never test data, and write to `results/ru
 ## 11. Not available yet
 
 - **Hyperparameter tuning.** `models/gp/calibrate.py` is the historical GP tuner. It needs Ray Tune and HyperOpt, which are not installed in `debbirth`, and does not read the JSON configs. JSON-based tuning for GP and NN is T08B, and the temperature protocol is T08.
-- **Command-line interface.** There is no single training CLI beyond the two full-parameter module entry points (T08A); use the Python calls above.
 - **Simplified exports.** `symbolic.py` simplified SymPy/MATLAB output drops the protected semantics of `pdiv`, `plog` and the real `cbrt` (T06D). Use `expression.txt` or the predictor.
 - **Final settings.** Example configs and the small runs here are engineering checks; final settings and comparisons are T08/T09.

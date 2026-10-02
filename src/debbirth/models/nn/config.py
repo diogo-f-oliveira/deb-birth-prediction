@@ -40,6 +40,8 @@ class TrainDEBBirthNetConfig:
 
     # Output
     outdir: Optional[Path] = None
+    # Optional suffix for the auto-created run directory (as in TrainGPConfig).
+    run_name: Optional[str] = None
     boundary_temperature: float = 1.0
     checkpoint_selection: str = "final_epoch"  # final_epoch | best_val_loss
 

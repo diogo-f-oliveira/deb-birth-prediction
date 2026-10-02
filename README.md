@@ -97,6 +97,30 @@ conda run -n debbirth python -m src.debbirth.models.nn.train
 
 These entry points load [gp_full_par.json](experiments/gp_full_par.json) and [nn_full_par.json](experiments/nn_full_par.json), train, report validation metrics, and print the saved directory under `results/runs/`. They preserve the previous example hyperparameters; these are full training runs, not setup checks. Held-out test evaluation is explicit and separate.
 
+### Shared training CLI
+
+`src.debbirth.train` trains and validates one run of any of the six models through the same Python trainers. `--config` defaults to `experiments/<model>_<formulation>.json`:
+
+```bash
+conda run -n debbirth python -m src.debbirth.train --model nn --formulation boundary --seed 42
+```
+
+```bash
+conda run -n debbirth python -m src.debbirth.train --model gp --formulation normalized --config experiments/gp_normalized.json --num-workers 4
+```
+
+- **Flags.** `--model {gp,nn}` and `--formulation {full_par,normalized,boundary}` are required. The formulation must match the config's `data_spec.formulation`. Optional overrides are `--seed`, `--data-dir`, `--outdir`, `--run-name`, `--num-workers` and `--device` (NN only). `--dry-run` prints the resolved config and exits without loading data. See `--help`.
+- **Precedence.** Dataclass defaults, then the config file, then flags given explicitly. Hyperparameters, including `boundary_temperature`, are set only in the config file.
+- **Output directory.** A config's `outdir` is provenance, not an instruction. Each run gets a new `results/runs/<timestamp>_<name>/` directory unless `--outdir` names a new or empty directory.
+- **Saved files.** Each run saves the trainer's usual files plus `cli_invocation.json`. That file holds the arguments, the source config path and hash, the overrides, and a reproduce command.
+- **Reproducing a run.** Pass its saved config:
+
+  ```bash
+  conda run -n debbirth python -m src.debbirth.train --model nn --formulation boundary --config results/runs/<run>/train_nn_config.json
+  ```
+- **Fail-fast checks.** Mismatched family/config/formulation, invalid settings and a non-empty `--outdir` fail before any data is loaded.
+- **Test data.** The CLI never evaluates the test split.
+
 Configuration construction and loading create no directories. Saved training returns `output["outdir"]` and a resolved `output["train_config"]`; use these rather than expecting an input config with `outdir=None` to be mutated. Runs record resolved settings, source CSV hashes, dependency versions, and code identity in `run_metadata.json`.
 
 Training settings can be customized through:
