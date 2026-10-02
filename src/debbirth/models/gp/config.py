@@ -85,7 +85,9 @@ class TrainGPConfig:
     low_memory: bool = False
     verbose: int = 0
 
-    class_weights: ClassWeight = "balanced"
+    # Unweighted log loss by default (T06C). "balanced" or {0: w0, 1: w1} is an
+    # explicit opt-in, e.g. to reproduce the archived balanced GP.
+    class_weights: ClassWeight = None
 
     seed: int = 42
     num_workers: int = 1

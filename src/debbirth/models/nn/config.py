@@ -29,7 +29,7 @@ class TrainDEBBirthNetConfig:
     net_config: DEBBirthNetConfig = None
     scaling_type: str = "standardize"  # none | standardize | log_standardize
 
-    # Imbalance handling
+    # Imbalance handling: unweighted BCE by default (T06C); weighting is an explicit opt-in.
     use_pos_weight: bool = False
     pos_weight: float = None
 

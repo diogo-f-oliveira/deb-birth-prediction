@@ -1,6 +1,6 @@
 {
   "boundary_temperature": 1.0,
-  "class_weights": null,
+  "class_weights": "balanced",
   "data_dir": "data/processed",
   "data_spec": {
     "feature_order": [

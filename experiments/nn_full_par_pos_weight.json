@@ -33,6 +33,6 @@
   "pos_weight": null,
   "scaling_type": "log_standardize",
   "seed": 42,
-  "use_pos_weight": false,
+  "use_pos_weight": true,
   "weight_decay": 0.001
 }
