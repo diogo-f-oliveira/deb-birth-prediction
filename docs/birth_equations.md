@@ -701,7 +701,7 @@ and the critical value occurs at \(\lambda_b=1\),
 
 Eq. (39) uses the fact that \(\Phi(\lambda_b;\gamma,k)<\Phi(1;\gamma,k)\) for every \(\lambda_b<1\) and that every \(\lambda_b<1\) is viable. Both facts are proved in Theorem 1 below.
 
-For \(k>1\), maturation ceases before the growth limit is reached. Let \(\lambda_R<1\) denote the first terminal length for which maturation is exactly stationary at birth. Lemma 6 below proves that it exists. Evaluating Eq. (12) at
+For \(k>1\), maturation ceases before the growth limit is reached. Let \(\lambda_R<1\) denote the first terminal length for which maturation is exactly stationary at birth. Lemma 6 below proves that it exists, and Lemma C proves that it is the only maturation-stationary terminal length in \((0,1)\). Evaluating Eq. (12) at
 
 \[
 \epsilon_b=1
@@ -763,8 +763,7 @@ Birth is reachable precisely when
 **Proof status (T07).**
 
 - **\(k\le1\):** Eq. (44) is proved in both directions (Theorem 1).
-- **\(k>1\), sufficiency:** \(\nu_b<\Psi\Rightarrow\) feasible is proved (Theorem 2).
-- **\(k>1\), necessity:** feasible \(\Rightarrow\nu_b<\Psi\) is conditional on the unresolved Lemma C: no egg larger than \(\lambda_R\) is viable. Without Lemma C, \(\Psi\) is a proven *sufficient* threshold, and the proven necessary conditions are the bounds in Corollary 3.
+- **\(k>1\):** Eq. (44) is proved in both directions (Theorem 2). Lemma C shows that \(\lambda_R\) is the unique zero of the maturation rate at birth, so no egg larger than \(\lambda_R\) is viable.
 
 Returning to the original variables,
 
@@ -992,32 +991,120 @@ Let \(\Psi=\Phi(\lambda_R)=R(\lambda_R)/k\), as in Eq. (42).
 
 **(b) Equality.** Within \((0,\lambda_R]\), only the egg \(\lambda_R\) reaches \(\Psi\). On that egg, maturity touches \(\nu_b\) tangentially, with \(y=0\) at birth, which violates the strict condition (8).
 
-**(c) Necessity.** Assume Lemma C below. Then \(V=(0,\lambda_R)\), and by (P8), \(\mathcal F=(0,\Psi)\). In that case Eq. (44) holds in both directions, egg uniqueness holds globally, and \(\nu_b=\Psi\) is infeasible.
+**(c) Necessity.** By Lemma C below, \(V=(0,\lambda_R)\), so by (P8) \(\mathcal F=(0,\Psi)\). Eq. (44) therefore holds in both directions, each feasible \(\nu_b\) is produced by exactly one egg, and \(\nu_b=\Psi\) is infeasible.
 
-### Lemma C (unresolved)
+### Lemma C (\(\lambda_R\) is the only zero of \(D\))
 
-**Claim.** For \(k>1\), \(D(\lambda_b)\le0\) for all \(\lambda_b\in(\lambda_R,1)\). Equivalently, no egg larger than \(\lambda_R\) is viable.
+**Why it is needed.** By (P8), \(\mathcal F=\Phi(V)\). Suppose \(V\) had a component above \(\lambda_R\) on which \(\Phi\ge\Psi\). Then feasible maturities would exist above \(\Psi\), and the "first" stationary length in Eq. (41) would not give the critical value. Lemma C rules this out. It shows that the root of \(D\) is unique, so the selection "first \(\lambda_R\)" is automatic.
 
-**Why it is required.** By (P8), \(\mathcal F=\Phi(V)\). Suppose \(V\) had a component above \(\lambda_R\) on which \(\Phi\ge\Psi\). Then feasible maturities would exist above \(\Psi\), and the "first" stationary length in Eq. (41) would not give the critical value. If such a component existed with \(\Phi<\Psi\), Eq. (44) would survive, but egg uniqueness would fail. Lemma C is therefore the missing step for necessity, for uniqueness, and for the selection rule "first \(\lambda_R\)". Uniqueness of the root of \(D\) is sufficient for Lemma C, but it is not assumed here.
-
-**Reductions.**
-
-- **(i) Transversality.** It is enough to show that \(D'<0\) at every zero of \(D\), that is,
-  \[
-  k\,\partial_{\lambda_b}\Phi>R'(\lambda_b)=\lambda_b(2\gamma+3\lambda_b)/(1+\gamma)
-  \]
-  wherever \(D=0\), that is, wherever \(k\Phi=R\). Then \(D\) has a single simple root.
-- **(ii) Monotone peak location.** By Lemma 4, each egg has at most one maturation peak, at reserve density \(\epsilon^*(\lambda_b)\). An egg is viable exactly when its peak occurs after birth, that is, when \(\epsilon^*<1\) or there is no peak. Lemma C follows if \(\epsilon^*\) is nondecreasing in \(\lambda_b\), meaning that larger eggs reach their maturation peak no later, in reserve density, than smaller ones.
-
-Neither reduction is proved here. (P9) and the representation
+**Claim.** For \(k\ge1\) and every \(\lambda_b\in(0,1)\) with \(D(\lambda_b)\ge0\),
 
 \[
-D=\int_1^\infty e^{-k\sigma}\frac{\lambda^2Q}{(\epsilon+\gamma)^2}\,d\epsilon
+\frac{d}{d\lambda_b}\left[\frac{D(\lambda_b)}{\lambda_b^2(2\gamma+3\lambda_b)}\right]<0 .
+\tag{P10}
 \]
 
-are the available tools. The difficulty is that a larger egg has more structure and reaches each length faster, but also faces a longer development period; these effects act in opposite directions on maturity.
+Consequently, for \(k>1\), \(\lambda_R\) is the only zero of \(D\) in \((0,1)\), and \(V=(0,\lambda_R)\).
 
-**Consequence if Lemma C failed.** \(\Psi=\Phi(\lambda_R)\) remains a proven sufficient threshold. A boundary model of \(\log\Psi\) could then only err by rejecting feasible parameter sets, never by accepting infeasible ones relative to this threshold. The bounds in Corollary 3 would remain necessary.
+*Proof of the consequence.* By (P10), \(D'(\lambda_R)<0\), so \(D<0\) just above \(\lambda_R\). Suppose \(D\ge0\) somewhere in \((\lambda_R,1)\). Let \(\lambda_2\) be the infimum of such points. Then \(\lambda_2>\lambda_R\), \(D(\lambda_2)=0\), and \(D<0\) on \((\lambda_R,\lambda_2)\), so \(D'(\lambda_2)\ge0\). This contradicts (P10) at \(\lambda_2\). \(\square\)
+
+*Proof of (P10).*
+
+**Coordinates.** Label trajectories by the constant \(C\) of Lemma 1(a), so that \(\lambda=\lambda(\epsilon,C)\) and
+
+\[
+\lambda_C:=\partial_C\lambda=-\lambda^2(\epsilon+\gamma)^{1/3}<0 .
+\]
+
+Write the maturity (P5) as \(N(\epsilon,C)\) and the maturation rate as \(Y(\epsilon,C)=S(\epsilon,\lambda)-kN\). Define
+
+\[
+Y_\lambda:=\partial_CY/\lambda_C ,
+\]
+
+the change of the maturation rate across trajectories at fixed \(\epsilon\), per unit change of \(\lambda\). At \(\epsilon=1\) we have \(\lambda=\lambda_b\) and \(d\lambda_b/dC=\lambda_C(1,C)\). Hence \(D(\lambda_b)=Y(1,C)\) and \(D'(\lambda_b)=Y_\lambda(1,C)\).
+
+**Evolution along a trajectory.** Let a prime denote \(\partial_\epsilon\) at fixed \(C\), and let
+
+\[
+P=-\frac{dS}{d\epsilon}\Big|_{\text{trajectory}}=\frac{\lambda^2Q}{(\epsilon+\gamma)^2},
+\]
+
+which follows from (P7) and \(d\tau/d\epsilon=-\lambda/(\gamma\epsilon)\). Then \(\nu'=-(\lambda/\gamma\epsilon)\,y\) gives
+
+\[
+Y'=-P+\frac{k\lambda}{\gamma\epsilon}\,Y .
+\tag{P11}
+\]
+
+Differentiate (P11) in \(C\), and use \(\lambda_C'/\lambda_C=(2\lambda-\epsilon)/(3\epsilon(\epsilon+\gamma))\), which follows from Eq. (16):
+
+\[
+Y_\lambda'=b\,Y_\lambda-P_\lambda+\frac{k}{\gamma\epsilon}\,Y,\qquad
+b=\frac{k\lambda}{\gamma\epsilon}+\frac{\epsilon-2\lambda}{3\epsilon(\epsilon+\gamma)} .
+\tag{P12}
+\]
+
+Here \(P_\lambda=\partial P/\partial\lambda\) at fixed \(\epsilon\).
+
+**Weighted combination.** Let
+
+\[
+m(\lambda)=\partial_\lambda\log[\lambda^2(2\gamma+3\lambda)]=\frac2\lambda+\frac{3}{2\gamma+3\lambda},
+\qquad W=Y_\lambda-m(\lambda)\,Y .
+\]
+
+Using \(\lambda'=-\lambda(\epsilon-\lambda)/(3\epsilon(\epsilon+\gamma))\), direct algebra gives
+
+\[
+W'=b\,W+\big(mP-P_\lambda\big)+E\,Y,
+\tag{P13}
+\]
+
+with
+
+\[
+mP-P_\lambda=\frac{\lambda^2(\gamma^2+12\gamma\lambda+9\lambda^2)}{3(2\gamma+3\lambda)(\epsilon+\gamma)^2}>0,
+\]
+
+\[
+E=\frac{4\gamma^2+6\gamma\epsilon+3\epsilon(2\gamma+3\lambda)^2/\gamma+3(k-1)(\epsilon+\gamma)(2\gamma+3\lambda)^2/\gamma}{3\epsilon(\epsilon+\gamma)(2\gamma+3\lambda)^2}>0\quad(k\ge1).
+\]
+
+Both forcing coefficients are positive regardless of the sign of \(Q\). This is why the weight \(m\) was chosen: it cancels every term of indefinite sign.
+
+**Integration.** Let \(B(\epsilon)=\int_1^\epsilon b\). Integrating \((e^{-B}W)'=e^{-B}[(mP-P_\lambda)+EY]\) over \([1,\infty)\), and using \(e^{-B}W\to0\) (shown below), gives
+
+\[
+W(1)=-\int_1^\infty e^{-B(\epsilon)}\Big[(mP-P_\lambda)+E\,Y\Big]\,d\epsilon .
+\]
+
+If \(D(\lambda_b)\ge0\), Lemma 4 gives \(Y>0\) for \(\epsilon>1\), so the integrand is positive and \(W(1)<0\). Finally,
+
+\[
+W(1)=D'(\lambda_b)-m(\lambda_b)D(\lambda_b)=\lambda_b^2(2\gamma+3\lambda_b)\,\frac{d}{d\lambda_b}\left[\frac{D}{\lambda_b^2(2\gamma+3\lambda_b)}\right],
+\]
+
+which proves (P10).
+
+**Behaviour as \(\epsilon\to\infty\).** Along a trajectory, \(\lambda\sim(A\epsilon^{1/3})^{-1}\). The terms \(k\lambda/(\gamma\epsilon)\) and \(\lambda/(\epsilon(\epsilon+\gamma))\) are integrable, so \(B=\tfrac13\log(\epsilon+\gamma)+O(1)\) and \(e^{-B}=O(\epsilon^{-1/3})\).
+
+For \(W\):
+
+- \(S=O(\epsilon^{-2/3})\) and \(N=O(\epsilon^{-1})\), so \(Y=O(\epsilon^{-2/3})\) and \(mY=O(\epsilon^{-1/3})\).
+- \(\lambda_C\) is of exact order \(\epsilon^{-1/3}\), and \(S_\lambda\lambda_C=O(\epsilon^{-2/3})\).
+- Differentiating (P5) in \(C\) under the integral gives \(N_C=O(\epsilon^{-1})\).
+- Hence \(Y_\lambda=(S_\lambda\lambda_C-kN_C)/\lambda_C=O(\epsilon^{-1/3})\).
+
+So \(W=O(\epsilon^{-1/3})\) and \(e^{-B}W\to0\).
+
+The domination bounds of Lemma 3, locally uniform in \(C\), justify differentiating (P5) in \(C\) and exchanging \(\partial_C\) with \(\partial_\epsilon\). \(\square\)
+
+**Checks.**
+
+- The identities for \(P\), (P12), \(mP-P_\lambda\) and \(E\) were confirmed by symbolic algebra.
+- At \(k=1\), the claim can be read off directly: \(D/[\lambda_b^2(2\gamma+3\lambda_b)]=\gamma(1-\lambda_b)/[(1+\gamma)(2\gamma+3\lambda_b)]\), which is decreasing.
+- Before this proof was written, a throwaway numerical quadrature found no counterexample. It guided the search and is not part of the argument.
 
 ### Corollary 3 (necessary bounds and the sign of \(\log\Psi\))
 
@@ -1033,7 +1120,7 @@ The accepted CONTROLO'26 paper calls \(kv_H^b<f^3\) sufficient. This analysis sh
 1<\Psi<\frac1k\ \ (k<1),\qquad
 \Psi=1\ \ (k=1),\qquad
 \lambda_{\mathrm{low}}^3<\Psi<\frac1k<1\ \ (k>1),
-\tag{P10}
+\tag{P14}
 \]
 
 For \(k>1\), the lower bound uses \(\Psi=R(\lambda_R)/k\), the fact that \(R\) is increasing, \(\lambda_R>\lambda_{\mathrm{low}}\), and \(R(\lambda_{\mathrm{low}})/k=\lambda_{\mathrm{low}}^3\). Hence
@@ -1043,11 +1130,11 @@ For \(k>1\), the lower bound uses \(\Psi=R(\lambda_R)/k\), the fact that \(R\) i
 \log\Psi\le-\log k,\ \text{with equality only at } k=1.
 \]
 
-For \(k>1\), these bounds concern \(\Psi=\Phi(\lambda_R)\) and do not depend on Lemma C. They are analytical constraints that a learned \(F\approx\log\Psi\) may be checked against.
+These bounds are analytical constraints that a learned \(F\approx\log\Psi\) may be checked against.
 
 ### Ties and numerical tolerance
 
-The boundary set \(\nu_b=\Psi\) is infeasible in every proven case: by Theorem 1 for \(k\le1\), and by Theorem 2(b) for the egg \(\lambda_R\) when \(k>1\). This matches the strict decision rule \(F-\log\nu_b>0\) used by the implementation.
+The boundary set \(\nu_b=\Psi\) is infeasible for all \(k\): by Theorem 1 for \(k\le1\), and by Theorem 2(b)-(c) for \(k>1\). This matches the strict decision rule \(F-\log\nu_b>0\) used by the implementation.
 
 The practical labels (get_lb2 with a timeout and failures treated as infeasible) need not reproduce this surface exactly near the boundary.
 
@@ -1062,7 +1149,7 @@ The practical labels (get_lb2 with a timeout and failures treated as infeasible)
 | Continuity of \(\Phi\), \(\Phi\to0\); monotonicity on viable eggs (Lemmas 3, 5) | Proved |
 | \(k\le1\): \(\mathcal F=(0,\Psi)\), strict inequality, \(\Psi(\gamma,1)=1\) (Theorem 1) | Proved |
 | \(k>1\): existence of \(\lambda_R\); \(\nu_b<\Psi\Rightarrow\) feasible (Lemma 6, Theorem 2a-b) | Proved |
-| \(k>1\): feasible \(\Rightarrow\nu_b<\Psi\); global egg uniqueness | **Conditional on Lemma C** |
+| \(k>1\): unique zero \(\lambda_R\) of \(D\); feasible \(\Rightarrow\nu_b<\Psi\); egg uniqueness (Lemma C, Theorem 2c) | Proved |
 | \(kv_H^b<f^3\) necessary; bounds and sign of \(\log\Psi\) (Corollary 3) | Proved |
 
 ---

@@ -17,9 +17,9 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 - Use conda `debbirth` for code execution. Prefer direct scientific checks and small experiments over new test files. Do not create package infrastructure or a general experiment framework just to complete this backlog.
 - This file is a development plan, not a request to start every experiment now. Execute the scope of the active user request; no background scheduling is implied.
 
-**Current task:** T07 (in progress; only Lemma C for k > 1 remains). T01-T06, T06A, T06B and T06C are complete.
+**Current task:** None. T01-T07, T06A, T06B, T06C and T08A are complete.
 
-**Next action:** T06D before relying on simplified GP exports; T07 can proceed independently; T08/T08B before T09. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
+**Next action:** T06D before relying on simplified GP exports; T08/T08B before T09. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
 
 ## Model comparison
 
@@ -175,7 +175,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
 ### T07 - Review and complete the mathematical proof
 
-- [ ] **IN PROGRESS** | Dependencies: `docs/birth_equations.md`. Can proceed independently of model implementation; does not block initial training or tuning.
+- [x] **DONE** | Dependencies: `docs/birth_equations.md`. Can proceed independently of model implementation; does not block initial training or tuning.
 - Check the assumptions, parameter domain, scaling transformation, and integral expressions in the existing derivation.
 - Establish that the viable trajectory family attains every maturity below the proposed critical value, making the feasible maturity set the stated interval.
 - Justify why the specified endpoint gives the maximum attainable viable maturity, particularly for `k > 1`. Distinguish a supremum on the strict viable region from a value attained on its limiting boundary.
@@ -184,7 +184,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 - Update `docs/birth_equations.md` with missing arguments and explicit assumptions. If a claim remains unresolved, identify the exact claim and missing argument; do not present the characterization as fully proven or mark this task complete merely because the gap is documented.
 - **Done when:** every step leading to `nu_b < Psi(gamma, k)` is justified analytically, with assumptions stated. Numerical experiments are not a substitute for proof and are not required by this task.
 - **Scope:** mathematical review only. Implementation checks belong to T03/T05/T06; no DEBtool comparisons, numerical Phi/Psi evaluator, solver retries, or timeout relabeling are required. Complete this review before presenting the full critical-boundary characterization as proven.
-- **Progress (2026-10-02):** `docs/birth_equations.md` now has a feasibility definition after Eq. (8) and a new section, *Proof of the critical-boundary characterization*. Existing equation numbers are unchanged; new equations are labelled (P1)-(P10).
+- **Result (2026-10-02):** `docs/birth_equations.md` now has a feasibility definition after Eq. (8) and a new section, *Proof of the critical-boundary characterization*. Existing equation numbers are unchanged; new equations are labelled (P1)-(P14). `nu_b < Psi(gamma, k)` is proven in both directions for all k > 0, with strict inequality and infeasible equality.
   - **Checked:** the algebra of Eqs. (9)-(35).
   - **Proved:**
     - Lemma 1: each egg corresponds to exactly one `lambda_b`, and the maturity solution is unique.
@@ -194,11 +194,10 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
     - Lemma 5: Phi is strictly increasing on viable eggs, via formula (P9).
     - Theorem 1: the case k <= 1 in full.
     - Lemma 6: `lambda_R` exists, with `lambda_R > gamma/(k(1+gamma)-1)`.
-    - Theorem 2a/b: sufficiency for k > 1, and the tangential equality case.
+    - Theorem 2: the case k > 1 in full (sufficiency, the tangential equality case, and necessity via Lemma C).
+    - Lemma C: uniqueness is required, and it is proved. For k >= 1, `D/(lambda_b^2 (2 gamma + 3 lambda_b))` strictly decreases wherever the maturation rate at birth D is nonnegative (P10). So `lambda_R` is the unique zero of D and the viable eggs are exactly `(0, lambda_R)`. The proof uses the variational equation across trajectories (P11)-(P13), with a weight that makes both forcing terms positive.
     - Corollary 3: `k v_Hb < f^3` is necessary; `1 < Psi < 1/k` for k < 1 and `lambda_low^3 < Psi < 1/k` for k > 1, so `sign(log Psi) = sign(1-k)`.
-  - **Open:** Lemma C. For k > 1, no egg larger than `lambda_R` is viable. Uniqueness in this sense is required: without it, k > 1 necessity, global egg uniqueness and the "first `lambda_R`" selection are unproven. Two reductions are recorded: transversality of D at its zeros, and a monotone maturation-peak location.
-  - **Heuristic only:** a throwaway scratch quadrature, approved by the user and not retained, found no counterexample. It is not evidence, and the task stays open.
-  - **Next action:** prove Lemma C analytically, or find a counterexample and revise Eq. (42).
+  - **Checks:** the algebraic identities behind Lemma C (Ṡ, P, (P12), `mP - P_lambda`, E) were confirmed with SymPy in scratch. Throwaway numerical quadratures, approved by the user and not retained, guided the search and catch sign errors only. They are not part of the proof.
 
 ### T08 - Finalize the experiment and temperature protocol
 
@@ -313,6 +312,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ## Progress and decisions
 
+- **2026-10-02:** Completed T07: proved Lemma C (`lambda_R` is the unique zero of D for k > 1), so `nu_b < Psi` is now proven in both directions for all k. Documentation only.
 - **2026-10-02:** T07 partially completed in `docs/birth_equations.md`: feasibility definition, Lemmas 1-6, Theorems 1-2 and Corollary 3. The characterization `nu_b < Psi` is proven for k <= 1. For k > 1 it is proven sufficient; necessity is conditional on the open Lemma C, which is stated precisely. AGENTS.md records this status and the proven bounds on `log Psi`. Documentation only; no code or models changed.
 - **2026-10-02:** Completed T08A: shared training CLI `python -m src.debbirth.train`, with `cli_invocation.json` records. Per the user: hyperparameters stay in configs, and a config's outdir is provenance (fresh run directory unless `--outdir`). Added NN `run_name` for parity with GP. Small GP/NN boundary runs reproduced exactly from their saved configs.
 - **2026-10-02:** Completed T06A: shared `ParameterPredictor` with `NNPredictor`/`GPPredictor`, one-pass GP validation, and coordinate-aware plotting (normalized axes, critical curves/surfaces, verified slices). Run: `results/runs/2026-10-02T17-07-29-933074_t06a_validation/`.
