@@ -32,7 +32,7 @@ L = sum_i w_i * BCE(y_i, sigmoid((F_i - log_nu_b_i) / T)) / sum_i w_i     over a
 - **Canonical decisions:** boundary models use the strict `margin > 0` in both families. Score models keep their historical rules. GP uses gplearn's argmax, so `probability > 0.5` and a tie is infeasible. NN uses `probability >= net_config.threshold`. These differ only at exactly 0.5.
 - **Classifier outputs:** GP classifier outputs come from one program execution and reproduce gplearn's `predict_proba`/`predict` exactly. Scores may be infinite, but NaN scores raise.
 
-`load_gp_run` returns a predictor. The archived full-parameter GP's training config cannot be reconstructed, so its predictor uses the historical unscaled `(g, k, v_Hb, f)` schema. `train_gp_classifier` computes validation metrics through `GPPredictor.evaluate_prepared`: one prediction pass whose classifier metrics equal the historical two-call `evaluate_binary_classifier` used by the tuner.
+`train_gp_classifier` and `load_gp_run` both return a predictor. The archived full-parameter GP's training config cannot be reconstructed, so its predictor uses the historical unscaled `(g, k, v_Hb, f)` schema. `train_gp_classifier` computes validation metrics through `GPPredictor.evaluate_prepared`: one prediction pass whose classifier metrics equal the historical two-call `evaluate_binary_classifier` used by the tuner.
 
 ## Saved runs
 

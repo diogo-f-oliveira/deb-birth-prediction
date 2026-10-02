@@ -133,6 +133,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
     - **Interface checks:** shapes, finiteness and probability ranges; identity of the original-parameter and prepared paths; threshold path; strict boundary decisions and logit = margin/T; and critical maturity in log/exp and original/normalized forms, consistent with the decisions.
     - **Equivalence checks:** scaling invariance for normalized/boundary models (max probability change 7e-16 GP, 0 NN; no decision flips); equality with gplearn APIs; and one-pass metrics reproducing T06's saved validation metrics. The trainer's validation metrics equal the historical evaluator.
     - **Reload and plots:** exact fresh-process reload of all eight predictors. Original, normalized (k=0.3, 3) and critical-surface plots were inspected; a mixed-f slice is rejected. Archived artifacts and source CSVs were unchanged.
+  - **Follow-up (2026-10-02):** `train_gp_classifier` now returns its `predictor`, as `train_net` does, so unsaved GP runs need no manual `GPPredictor`. A direct check confirmed that for saved and unsaved normalized/boundary runs, the returned, freshly built and reloaded predictors agree exactly and reproduce the validation metrics.
   - **Run:** `results/runs/2026-10-02T17-07-29-933074_t06a_validation/`. The tuner's test-set evaluation still uses the historical `evaluate_binary_classifier`; JSON-based tuning is T08B.
 
 ### T06B - Create and configure the revised GP function set

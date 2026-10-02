@@ -71,13 +71,13 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True, *, prepared=N
     engine = None
     if cfg.data_spec.formulation == "boundary":
         model, engine = fit_gp_boundary(prepared["train"], cfg)
-        val_metrics = GPPredictor(model, cfg.data_spec).evaluate_prepared(prepared["val"])
         history = engine.run_details_
     else:
         model = create_gp_classifier(cfg)
         model.fit(features["train"], targets["train"])
-        val_metrics = GPPredictor(model, cfg.data_spec).evaluate_prepared(prepared["val"])
         history = getattr(model, "run_details_", None)
+    predictor = GPPredictor(model, cfg.data_spec)
+    val_metrics = predictor.evaluate_prepared(prepared["val"])
 
     # Only save artifacts when requested
     if save_run:
@@ -86,6 +86,7 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True, *, prepared=N
 
     return {
         "model": model,
+        "predictor": predictor,  # original-parameter inference, as in train_net
         "engine": engine,  # boundary only: dataset-bound engine for diagnostics; never saved
         "train_config": cfg,
         "outdir": cfg.outdir if save_run else None,

@@ -179,7 +179,7 @@ Each training call below uses `prepared=subset(...)` and small settings so that 
    - `metrics/val_metrics.json`, `history.csv`;
    - `model/gp_model.joblib`, `model/best_program.txt`, `model/expression.txt`.
 
-4. **Load and predict** (section 6). `out["predictor"]` does not exist for GP training results; call `load_gp_run(out["outdir"])["predictor"]` or build `GPPredictor(out["model"], cfg.data_spec)`.
+4. **Load and predict** (section 6). As with NN, `out["predictor"]` is ready to use after training, including unsaved runs; `load_gp_run(out["outdir"])["predictor"]` gives the same predictions after reloading.
 
 To reproduce the historical balanced setting, use `gp_full_par_balanced.json`. The archived paper model is in `results/models/DEBBirthGP` (section 7).
 
