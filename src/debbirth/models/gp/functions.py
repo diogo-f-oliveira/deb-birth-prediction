@@ -155,6 +155,30 @@ EXTENDED_FUNCTION_SET: GPFunctionSet = DEFAULT_FUNCTION_SET + (
     ATAN
 )
 
+# Revised search set for the new normalized/boundary experiments (T06B):
+# EXTENDED without max, sqrt, pinv and neg, plus cube. Protected definitions
+# are the repository's own PDIV/PLOG, not gplearn's stock div/log.
+REVISED_FUNCTION_SET: GPFunctionSet = (
+    "add",
+    "sub",
+    "mul",
+    PDIV,
+    PLOG,
+    "min",
+    CBRT,
+    SQUARE,
+    CUBE,
+    ATAN,
+)
+
+# Named sets selectable by tuning scripts; JSON stores the resolved primitive list.
+NAMED_FUNCTION_SETS = {
+    "arithmetic": ARITHMETIC_FUNCTION_SET,
+    "default": DEFAULT_FUNCTION_SET,
+    "extended": EXTENDED_FUNCTION_SET,
+    "revised": REVISED_FUNCTION_SET,
+}
+
 # Stable serialization identifiers. Protected definitions above remain unchanged
 # so archived joblib programs and symbolic/MATLAB exports retain their semantics.
 PRIMITIVE_REGISTRY = {name: name for name in (

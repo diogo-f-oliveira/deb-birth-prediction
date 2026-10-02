@@ -19,7 +19,7 @@ from ...data.schema import DatasetSpec
 from .config import GPConfig, TrainGPConfig
 from .train import train_gp_classifier, save_gp_run
 from ...evaluate.predict import evaluate_binary_classifier
-from .functions import DEFAULT_FUNCTION_SET, EXTENDED_FUNCTION_SET, ARITHMETIC_FUNCTION_SET
+from .functions import NAMED_FUNCTION_SETS
 from .constants import DEFAULT_CONSTANT_SET, EXTENDED_CONSTANT_SET, NO_CONSTANT_SET
 
 
@@ -64,14 +64,9 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
 
     # Get function set
     func_set_option = config.get("func_set")
-    if func_set_option == "arithmetic":
-        function_set = ARITHMETIC_FUNCTION_SET
-    elif func_set_option == "default":
-        function_set = DEFAULT_FUNCTION_SET
-    elif func_set_option == "extended":
-        function_set = EXTENDED_FUNCTION_SET
-    else:
+    if func_set_option not in NAMED_FUNCTION_SETS:
         raise ValueError(f"Unknown function_set option: {func_set_option}")
+    function_set = NAMED_FUNCTION_SETS[func_set_option]
     # Get constants set
     const_set_option = config.get("const_set")
     if const_set_option == "default":
