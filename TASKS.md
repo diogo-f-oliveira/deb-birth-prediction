@@ -1,6 +1,6 @@
 # Development tasks
 
-Last updated: 2026-09-08
+Last updated: 2026-10-02
 
 ## Objective
 
@@ -17,13 +17,13 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 - Use conda `debbirth` for code execution. Prefer direct scientific checks and small experiments over new test files. Do not create package infrastructure or a general experiment framework just to complete this backlog.
 - This file is a development plan, not a request to start every experiment now. Execute the scope of the active user request; no background scheduling is implied.
 
-**Current task:** None. T01-T05 are complete; the NN inference/evaluation portion of T06A is implemented.
+**Current task:** None. T01-T05, T06B and T06C are complete; the NN inference/evaluation portion of T06A is implemented.
 
-**Next action:** T06 in backlog order, using gplearn for normalized/boundary GP, followed by remaining T06A integration/plotting. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
+**Next action:** T06 (production normalized/boundary GP with the revised set, `x_b` and unweighted loss from `experiments/gp_{normalized,boundary}.json`), followed by remaining T06A integration/plotting. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
 
 ## Model comparison
 
-**Before final experiments:** complete the revised GP function set (T06B) and unweighted classifier defaults (T06C), including their propagation into experiment JSON and tuning. These are prerequisites for T09; historical artifacts retain their recorded settings.
+**Before final experiments:** the revised GP function set (T06B) and unweighted classifier defaults (T06C) are implemented in configs and the existing tuner; T08B must carry them into JSON-based tuning. These are prerequisites for T09; historical artifacts retain their recorded settings.
 
 | Formulation | GP | NN | Role |
 | --- | --- | --- | --- |
@@ -98,7 +98,8 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 ### T06 - Implement normalized and boundary GP models
 
 - [ ] **TODO** | Dependencies: T03 and T04.
-- Implement both formulations with gplearn as selected in T04 (`docs/gp_backend_decision.md`). For the boundary model, evolve `F(gamma, k)` with the fixed offset outside the tree and a documented positive training temperature. Integrate the prototype's explicit row/mask contract; keep loss normalization and final-program selection separate from tournament parsimony, documenting any change from gplearn's last-generation raw-loss selection.
+- Implement both formulations with gplearn as selected in T04 (`docs/gp_backend_decision.md`). For the boundary model, evolve `F(gamma, k)` with the fixed offset outside the tree and a documented positive training temperature. Integrate the prototype's explicit row/mask contract; keep loss normalization separate from tournament parsimony. **Decision (2026-10-02):** keep gplearn's last-generation final-program selection (raw loss); the number of generations is a tuned hyperparameter, analogous to final-epoch NN checkpoints under dropout. Document it; alternative selection policies are T08C, outside T06.
+- Use the repository's protected primitives and named constant terminals in the boundary engine rather than the prototype's stock `div`/`log` and `const_range` constants (displayed random constants are rounded). Constant columns must not be mistaken for, or widen, the permitted `(gamma, k[, x_b])` features. Exports used for inference depend on T06D; until then use the executable gplearn program.
 - Integrate the revised function set and x_b feature configuration specified in T06B; retain historical primitive definitions for old artifacts. Apply T06C's unweighted defaults to the production boundary loss as well as the normalized classifier.
 - Save sufficient settings and the raw expression to reproduce inference. Export readable expressions with the actual feature names and full original-variable feasibility rule, including normalization and `exp(F)` where applicable.
 - Keep historical gplearn class/module import paths and primitive definitions available for loading archived artifacts. Confine backend-specific evolution and serialization to the GP implementation; analysis code should not need to access gplearn private attributes.
@@ -118,22 +119,38 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
 ### T06B - Create and configure the revised GP function set
 
-- [ ] **TODO** | Dependencies: T03's registries and shared features; coordinate with T06 production integration. Required before finalizing T08 and running T09 final experiments.
+- [x] **DONE** | Dependencies: T03's registries and shared features; coordinate with T06 production integration. Required before finalizing T08 and running T09 final experiments.
 - Implement a separately named function set following `docs/next_steps.md`: remove `max`, square root, inversion, and negation from the new search set. Enumerate the retained operators and their protected semantics; do not silently substitute gplearn's stock protected operators for the repository's definitions.
 - Include `x_b = g/(f+g) = gamma/(1+gamma)` through shared feature preparation and explicit experiment configuration. It is a derived feature, not an independent parameter or a reason to expose f to the boundary tree. Retain an otherwise matched without-x_b option for a later ablation if useful.
 - Keep historical function sets, primitive definitions, and serialized names available for old models. Removing an operator from the new set does not remove named constants such as sqrt2/sqrt3; state constant choices separately.
 - Make the revised set and feature schema selectable in GP JSON experiments and tuning through the existing registries. Use them explicitly for the final normalized/boundary GP experiments; historical full_par artifacts keep their recorded set.
 - **Done when:** the named set, resolved operator list, feature order, and constant choices are documented and reconstructable from an experiment config; a small direct/integration check confirms excluded operators cannot be sampled and exports agree with runtime semantics. Link the final configs and actual checks here; no new test framework is required.
+- **Result (2026-10-02):** `REVISED_FUNCTION_SET` (`"revised"` in `NAMED_FUNCTION_SETS`, used by the tuner): `add, sub, mul, pdiv, plog, min, cbrt, square, cube, atan` with the repository's protected `pdiv`/`plog`. Semantics, constants (`c1, c2, c3, c1_2, c1_3, sqrt2, sqrt3, c0`, as in the full-parameter example) and feature orders are documented in `docs/formulations_and_data.md`. Configs: `experiments/gp_normalized.json` (`gamma, k, nu_b, x_b`) and `experiments/gp_boundary.json` (`gamma, k, x_b`); `include_x_b=false` is the matched ablation. Historical sets/primitives are unchanged. `experiments/validate_t06bc.py` ran in `debbirth` on 2,000 sampled training rows. The function set resolves from JSON. Over 5 generations x 300 programs, only retained operators were sampled, and all ten were used. Run: `results/runs/2026-10-02T16-16-03-355538_t06bc_validation/`.
+- **Criterion change (2026-10-02):** export agreement is moved to T06D at the user's request, because changing the symbolic pipeline is outside this task's scope. The same run measured the existing export against runtime execution and recorded a finding, without asserting it. Of 339 unique programs, 16 disagree on data rows, 18 on data/extreme/tied rows, and 8 are undefined (e.g. `pdiv(x, c0)` parsed as `x/0`). The cause is that `pdiv`/`plog` lose protection and `cbrt` becomes a principal root. `symbolic.py` is unchanged.
 
 ### T06C - Make classifiers unweighted by default
 
-- [ ] **TODO** | Dependencies: existing family configs; coordinate with T05/T06 and T08B. Required before finalizing T08 and running T09 final experiments.
+- [x] **DONE** | Dependencies: existing family configs; coordinate with T05/T06 and T08B. Required before finalizing T08 and running T09 final experiments.
 - Default to ordinary unweighted BCE/log loss for GP and NN across full_par, normalized, and boundary formulations. Use GP `class_weights=None` and NN `use_pos_weight=False` with no active positive-class weight. Class balancing remains an explicit opt-in for historical reproduction or a deliberate separate experiment.
 - Inspect every path that can reintroduce weighting: config defaults, shipped experiment JSON, training entry points, the boundary adapter, tuning defaults/overrides, and examples. The T04 prototype currently constructs balanced weights internally; production integration must not inherit that behavior implicitly. Preserve completed prototype results as historical evidence.
 - Keep gplearn subsampling/OOB masks intact: removing class balancing means unit class weights, not disabling sample inclusion masks. Compute default loss as a mean over active observations. Record any consequent change to the effective loss/parsimony scale.
 - Make validation probability loss and temperature fitting unweighted by default too. Preserve evaluation metrics such as macro-F1 and MCC; these do not require class-weighted training. Explicit weighting must remain visible in the resolved config.
 - Preserve archived model/config files and reproduction settings. Mark previous weighted runs as historical or pilot results. Train/tune new final models under the unweighted policy; an older weighted artifact can remain a disclosed historical benchmark, not a matched unweighted run.
 - **Done when:** omitted weighting settings resolve to unweighted loss through direct training, JSON/CLI, and tuning paths where available; a small calculation verifies ordinary BCE on active rows, and explicit legacy weighting remains selectable. Record actual checks and resolved settings; do not run final searches as part of changing defaults.
+- **Result (2026-10-02):** `TrainGPConfig.class_weights` now defaults to `None`; `"balanced"` or a class mapping remains an explicit opt-in. NN `use_pos_weight=False` was already the default. The shipped `gp_full_par.json` and `nn_{full_par,normalized,boundary}.json` are unweighted; the previous weighted versions are kept as `gp_full_par_balanced.json` and `nn_*_pos_weight.json`. Archived configs record their weighting explicitly, and the archived GP still loads as `balanced` and predicts. Checks in `experiments/validate_t06bc.py` (same run as T06B):
+  - Default and JSON resolution: GP configs give `None`, NN configs give `False`.
+  - The GP tuner builds trials without `class_weights`. This was checked by static inspection because Ray/HyperOpt are absent.
+  - gplearn raw/OOB fitness equals ordinary mean log loss over in-bag/out-of-bag rows with 70% subsampling and with full sampling. Explicit `"balanced"` still equals the weighted mean (max relative error 4e-16).
+  - Two-epoch default normalized/boundary NN runs report validation loss equal to unweighted mean BCE.
+
+  Unweighted loss changes the loss scale relative to parsimony, so earlier tuned values do not transfer automatically. The T04 prototype still balances internally as historical evidence; the T06 production trainer must not. No CLI exists yet (T08A), and JSON-based tuning remains T08B.
+
+### T06D - Make GP symbolic exports agree with runtime semantics
+
+- [ ] **TODO** | Dependencies: T06B. Needed before any symbolic/MATLAB export is used for inference or reported as the model (T06 exports, T09/T12).
+- **Problem:** `src/debbirth/models/gp/symbolic.py` maps protected primitives to plain mathematics: `pdiv` to `a/b`, `plog` to `log(a)` and `pinv` to `1/a`. It also maps `cbrt` to SymPy's principal (complex for negatives) root, and gplearn's stock protected `div`/`log`/`sqrt`/`inv` to unprotected forms. `sp.simplify` can then remove expressions whose runtime behavior depends on protection. On the T06B run (`results/runs/2026-10-02T16-16-03-355538_t06bc_validation/`), 16 of 339 revised-set programs disagreed with runtime execution on data rows and 8 exported as undefined. AGENTS.md requires that simplification not silently discard protection semantics.
+- Decide the export contract: e.g. keep protected primitives as unevaluated named functions with numerical implementations for an executable export, alongside a readable form whose assumptions are stated. Keep historical readable output available for the archived model, and update the existing symbolic tests only as needed.
+- **Done when:** the exported expressions used for inference agree numerically with runtime execution on data and protection-activating inputs, including after simplification. Where the readable form is only conditionally valid, it is labeled as such. The archived model's export behavior is documented.
 
 ### T07 - Review and complete the mathematical proof
 
@@ -187,6 +204,13 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - **Done when:** tiny GP and NN tuning runs exercise fixed settings, sampled overrides, dependent parameters, and named constant/function choices as applicable; selected artifacts reload consistently, and a selected run can be reproduced from its saved training JSON with matching data and seed. Record actual commands, resolved configurations, and validation results without full tuning or a new test framework.
 - **Current gap (2026-09-07):** The existing GP tuner constructs configs independently of the JSON examples, uses hardcoded named function/constant sets, and ignores extra GP configuration overrides. No JSON-based tuning integration or end-to-end tuning verification is claimed yet. The best-model saving regression was corrected separately under T03 on 2026-09-08.
 
+### T08C - Consider GP final-program selection as a hyperparameter
+
+- [ ] **TODO (proposed)** | Dependencies: T06 and T08B. Not required for T06; the default stays gplearn's last generation.
+- The default policy keeps the last generation's best raw-loss program, with the number of generations tuned. This mirrors final-epoch NN checkpoints under dropout. Alternatives include selecting across generations or among final-generation candidates by validation loss/macro-F1, or by parsimony-penalized fitness. They change model selection and need retained programs, so treat them as an explicit tuning choice, not a silent default.
+- If pursued, compare policies on validation data only with matched budgets. Record the policy, metric and selected generation with each run, and keep the last-generation policy as the reference.
+- **Done when:** a recorded decision either keeps last-generation selection with rationale, or implements a selectable policy that resolves in configs/tuning and is validated on a small run.
+
 ### T09 - Train, tune, and compare the models
 
 - [ ] **TODO** | Dependencies: T08, T08B, T06A, T06B, and T06C; use T08A for command-line execution once implemented.
@@ -236,6 +260,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ## Progress and decisions
 
+- **2026-10-02:** Completed T06C (unweighted defaults; weighted configs kept as `*_balanced`/`*_pos_weight`) and T06B (revised function set and `gp_normalized`/`gp_boundary` configs with `x_b`) before T06, so T06 pilots use final settings. Decided that GP final-program selection stays at the last generation (generations are tuned); added T08C for alternative policies. Moved export-semantics agreement from T06B to the new T06D after reverting an out-of-scope `symbolic.py` change. Validation run: `results/runs/2026-10-02T16-16-03-355538_t06bc_validation/`.
 - **2026-09-08:** Added T06B for the revised GP function set from `docs/next_steps.md` and T06C for unweighted classifier defaults at the user's request. Both are prerequisites for final protocol/results (T08/T09), with propagation into JSON-based tuning (T08B). Preserve historical weighted models/function sets for disclosed benchmarks. Planning-only update; no code, experiment configs, or models changed.
 
 - **2026-09-08:** Completed T05 and the NN interfaces needed from T06A. Both variants train/save/reload through the existing NN workflow; selected checkpoint metrics and original-parameter inference were verified in `debbirth`, including exact fresh-process reload and historical NN predictions. See `docs/nn_formulations.md` and the T05 run summary. Preserved practical solver-failure labels, supplied data, archived artifacts and historical tuning; left GP integration, shared plotting, temperature/full tuning and the rest of T06A for subsequent tasks.

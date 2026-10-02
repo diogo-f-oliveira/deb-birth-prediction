@@ -62,13 +62,40 @@ NN scaling supports `none`, `standardize`, and `log_standardize`. Existing Torch
 
 The dataclass JSON interfaces save formulation, explicit feature order, optional `x_b`, scaling, boundary temperature, family settings, and paths. Saved feature order must agree with the spec. `boundary_temperature` defaults to 1 and other values require `boundary`; GP currently supports only `scaling_type="none"`.
 
-GP JSON stores stable primitive identifiers from `PRIMITIVE_REGISTRY`, an ordered list of constant names, and explicit depth settings. Constant values are defined once in `CONSTANT_REGISTRY` in `src/debbirth/models/gp/constants.py`. Add new constants there before selecting their names in a config. Existing names keep their existing values. Loading restores primitive objects, constant dataclasses, tuples, and numeric class-weight keys. Unknown identifiers and historical object-address strings raise clear errors rather than guessing a primitive. New saves contain only constant names, for example `"constants": ["c1", "c1_2", "sqrt2", "c0"]`. Unknown names and duplicate constants are rejected. Older name/value entries can still be read when their values exactly match the registry; overrides are rejected. Protected primitive implementations and exports are unchanged. Archived joblib inference still works when its training configuration cannot be reconstructed; the loader warns and returns `train_cfg=None`.
+GP JSON stores stable primitive identifiers from `PRIMITIVE_REGISTRY`, an ordered list of constant names, and explicit depth settings. Constant values are defined once in `CONSTANT_REGISTRY` in `src/debbirth/models/gp/constants.py`. Add new constants there before selecting their names in a config. Existing names keep their existing values. Loading restores primitive objects, constant dataclasses, tuples, and numeric class-weight keys. Unknown identifiers and historical object-address strings raise clear errors rather than guessing a primitive. New saves contain only constant names, for example `"constants": ["c1", "c1_2", "sqrt2", "c0"]`. Unknown names and duplicate constants are rejected. Older name/value entries can still be read when their values exactly match the registry; overrides are rejected. Protected primitive implementations are unchanged. Archived joblib inference still works when its training configuration cannot be reconstructed; the loader warns and returns `train_cfg=None`.
+
+### Class weighting (T06C)
+
+Classifier losses are unweighted by default for every family and formulation. `TrainGPConfig.class_weights` defaults to `None`; `"balanced"` or `{0: w0, 1: w1}` is an explicit opt-in. In gplearn 0.4.3, `class_weight=None` gives unit sample weights. Subsampling still zeroes out-of-bag rows, so the raw fitness is the ordinary mean log loss over in-bag rows and the OOB fitness is the mean over out-of-bag rows. Balanced weighting instead uses a weighted mean over in-bag rows. Changing the weights changes the loss scale relative to the fixed parsimony coefficient, so tuned parsimony values from weighted runs do not transfer automatically. The NN default is `use_pos_weight=False` (see [NN interfaces](nn_formulations.md)). The GP tuner builds trials without `class_weights`, so tuning trials are unweighted too. Archived configs record `"balanced"`/`use_pos_weight: true` explicitly and keep that behavior. The T04 boundary prototype keeps its internal balanced weights as historical evidence; the production boundary trainer (T06) must not inherit them.
+
+Shipped experiment configs follow the default. The previous weighted versions are retained for comparisons as `experiments/gp_full_par_balanced.json` and `experiments/nn_{full_par,normalized,boundary}_pos_weight.json`.
+
+### Revised GP function set (T06B)
+
+`REVISED_FUNCTION_SET` in `models/gp/functions.py` (tuner name `"revised"`) is the search set for the new normalized and boundary GP experiments. It is the extended set without `max`, `sqrt`, `pinv` and `neg`, plus `cube`. The resolved order and runtime semantics are:
+
+| Primitive | Runtime definition |
+| --- | --- |
+| `add`, `sub`, `mul` | gplearn stock, unprotected |
+| `pdiv(x, y)` | repository protected division: `(x + 1e-12) / y'`, with `y' = copysign(1e-12, y)` when `abs(y) < 1e-12` (zero maps to `+1e-12`) |
+| `plog(x)` | repository protected log: `log(max(x, 1e-12))`; negative inputs map to `log(1e-12)`, unlike gplearn's `log(abs(x))` |
+| `min` | gplearn stock `np.minimum` |
+| `cbrt` | real cube root `np.cbrt` (negative for negative inputs) |
+| `square`, `cube`, `atan` | `x**2`, `x**3`, `arctan(x)` |
+
+The repository's protected primitives are used, not gplearn's stock `div`/`log`. Historical sets (`arithmetic`, `default`, `extended`), primitive definitions and serialized names are unchanged for archived models. Constants are chosen separately. The new configs use the same named constants as the full-parameter example (`c1, c2, c3, c1_2, c1_3, sqrt2, sqrt3, c0`); `sqrt2`/`sqrt3` are constant terminals, not the excluded `sqrt` operator.
+
+`experiments/gp_normalized.json` (features `gamma, k, nu_b, x_b`) and `experiments/gp_boundary.json` (features `gamma, k, x_b`) select the revised set, `include_x_b=true` and unweighted loss, with the full-parameter example's untuned evolution settings. Setting `include_x_b=false` gives the otherwise matched ablation. The boundary config loads, but the production GP trainer still rejects boundary training until T06.
+
+### Symbolic export semantics
+
+The existing `symbolic.py` export does not preserve these runtime semantics. `pdiv` becomes `a/b`, `plog` becomes `log(a)`, and `cbrt` becomes SymPy's principal cube root, which is complex for negative arguments. The T06B validation run checked 339 sampled revised-set programs: the export disagreed with runtime execution on data rows for 16 of them and was undefined for 8 more (for example `pdiv(x, c0)` read as `x/0`). Do not use it for inference until T06D is resolved.
 
 Constructing or loading a config creates no directories. Relative data/output paths resolve against the repository root and serialize as relative paths when possible. Saving a run resolves `outdir=None` to a timestamped directory with microseconds, returning a new resolved config. Both trainers return `train_config`, `outdir`, `prepared`, and `data_metadata` alongside their historical outputs. Unsaved training returns `outdir=None` and creates no run directory. Use the returned config/path; do not assume the input config's `outdir` changes. Standalone save helpers also return the resolved config.
 
 Saved runs include `run_metadata.json` with source CSV hashes, row counts, split policy, configuration, Python/dependency versions, Git revision, and source-code hashes identifying uncommitted code. This does not bundle the source code or datasets themselves. Explicitly saving a run creates its directories; explicitly saving a config creates the requested JSON parent.
 
-Existing module entry points use `experiments/gp_full_par.json` and `experiments/nn_full_par.json`, preserving the prior example hyperparameters. They train and report validation metrics; held-out test evaluation is separate. These examples are not tiny checks and do not reproduce the archived paper settings exactly. T04 selected gplearn and verified separate normalized/boundary GP prototypes; see [the decision and experiment](gp_backend_decision.md). T05 now implements NN normalized/boundary training, checkpoint selection, evaluation-mode loading and original-parameter inference; see [NN interfaces and validation](nn_formulations.md). The production GP trainer still rejects boundary training pending T06. No common training CLI is included.
+Existing module entry points use `experiments/gp_full_par.json` and `experiments/nn_full_par.json`, preserving the prior example hyperparameters except that both are now unweighted (T06C). They train and report validation metrics; held-out test evaluation is separate. These examples are not tiny checks and do not reproduce the archived paper settings exactly. T04 selected gplearn and verified separate normalized/boundary GP prototypes; see [the decision and experiment](gp_backend_decision.md). T05 now implements NN normalized/boundary training, checkpoint selection, evaluation-mode loading and original-parameter inference; see [NN interfaces and validation](nn_formulations.md). The production GP trainer still rejects boundary training pending T06. No common training CLI is included.
 
 ## Direct validation results
 

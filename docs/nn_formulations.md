@@ -29,7 +29,11 @@ with gradient descent replacing symbolic evolution. The model fits binary
 Dictionary batches keep labels, features, row indices and unscaled offsets
 aligned through shuffling. Neither maturity nor row identity enters the network.
 
-The loss is stable `BCEWithLogitsLoss(reduction="mean")`. With
+The loss is stable `BCEWithLogitsLoss(reduction="mean")`. Since T06C the
+default and the shipped `experiments/nn_*.json` configs are unweighted
+(`use_pos_weight=false`, no `pos_weight`), so training and validation report
+ordinary mean BCE. Weighting is an explicit opt-in kept in
+`experiments/nn_*_pos_weight.json`. With
 `use_pos_weight=True`, positive terms receive `N_negative/N_positive`, computed
 on the selected training rows unless explicitly supplied. Validation reuses
 this training weight. The denominator is the number of rows, not the sum of
@@ -148,7 +152,8 @@ history, checkpoint metadata and fresh-process inference probes.
 Both main runs used the same 512 training and 128 validation observations,
 sampling/training seed 42, two 16-unit hidden layers, dropout 0.2, batches of
 64, log standardization, positive class weighting and eight epochs. Boundary
-temperature was 0.7. Both selected epoch 8. These are engineering diagnostics:
+temperature was 0.7. Both selected epoch 8. These are engineering diagnostics
+from weighted pilot runs that predate the T06C unweighted default:
 
 | Formulation | Validation weighted BCE | Macro-F1 | MCC |
 | --- | ---: | ---: | ---: |
