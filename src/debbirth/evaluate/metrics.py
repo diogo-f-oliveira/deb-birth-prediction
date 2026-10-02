@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 import json
 from typing import Optional, Any, Dict
@@ -87,6 +87,11 @@ class BinaryMetrics:
     fp: int
     tn: int
     fn: int
+
+    # Keyword-only defaults keep historical JSON and EpochBinaryMetrics usable.
+    mcc: float = field(default=float("nan"), kw_only=True)
+    log_loss: float = field(default=float("nan"), kw_only=True)
+    brier_score: float = field(default=float("nan"), kw_only=True)
 
     @classmethod
     def empty(cls) -> BinaryMetrics:

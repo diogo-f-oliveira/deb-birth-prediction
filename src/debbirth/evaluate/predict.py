@@ -14,11 +14,14 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
     recall_score,
     roc_auc_score,
+    matthews_corrcoef,
+    log_loss,
+    brier_score_loss,
 )
 
 from ..utils.numpy import convert_to_numpy
 from .metrics import extract_pos_proba, BinaryMetrics
-from ..utils.pytorch import collect_xy_from_dataloader
+from ..formulations import output_to_logit, boundary_margin
 
 
 def _safe_pair_mean(a: float, b: float) -> float:
@@ -67,6 +70,25 @@ def evaluate_binary_classifier(
 
     y_true = convert_to_numpy(y)
     y_true = (y_true >= 0.5).astype(np.int32)
+
+    return metrics_from_predictions(y_true, y_prob, y_pred=y_pred)
+
+
+def metrics_from_predictions(y, probabilities, *, y_pred):
+    """Metrics without model execution; callers supply their explicit decision.
+
+    Probability scores are unweighted. log_loss uses sklearn's numerical
+    clipping; training/validation BCE is separately computed from raw logits.
+    """
+    y_true = np.asarray(convert_to_numpy(y))
+    y_prob = extract_pos_proba(np.asarray(convert_to_numpy(probabilities))).astype(np.float64)
+    y_pred = np.asarray(convert_to_numpy(y_pred))
+    if y_true.ndim != 1 or y_pred.shape != y_true.shape or y_prob.shape != y_true.shape:
+        raise ValueError("Labels, probabilities and decisions must be aligned vectors.")
+    if not np.isin(y_true, [0, 1]).all() or not np.isin(y_pred, [0, 1]).all():
+        raise ValueError("Labels and decisions must be binary.")
+    if not np.isfinite(y_prob).all() or ((y_prob < 0) | (y_prob > 1)).any():
+        raise ValueError("Probabilities must be finite and in [0, 1].")
 
     # If after conversion we find no samples, return empty
     if y_true.size == 0:
@@ -140,6 +162,9 @@ def evaluate_binary_classifier(
         fp=fp,
         tn=tn,
         fn=fn,
+        mcc=float(matthews_corrcoef(y_true, y_pred)),
+        log_loss=float(log_loss(y_true, y_prob, labels=[0, 1])),
+        brier_score=float(brier_score_loss(y_true, y_prob)),
     )
 
 
@@ -200,13 +225,53 @@ def evaluate_pytorch_binary_classifier(
         loss_fn: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
         pos_label: int = 1,
         device: Optional[torch.device] = None,
+        *, formulation: Optional[str] = None, temperature: Optional[float] = None,
 ) -> Tuple[BinaryMetrics, float]:
-    """PyTorch-specific wrapper: compute loss over dataloader and call the generic evaluator.
+    """Collect loss, probabilities and decisions in one batched forward pass.
 
-    Returns:
-        (BinaryMetrics, loss)
+    Supports legacy tuple batches and aligned dictionary batches. Boundary
+    decisions use the margin sign, never rounded sigmoid probabilities.
+    loss_fn must return a batch mean (the NN trainer uses BCEWithLogitsLoss).
     """
-    loss = compute_loss_from_dataloader(model, dataloader, loss_fn, device=device)
-    X, y = collect_xy_from_dataloader(dataloader)
-    metrics = evaluate_binary_classifier(model, X, y, pos_label=pos_label)
-    return metrics, loss
+    model.eval()
+    if formulation is None:
+        formulation = "boundary" if hasattr(model, "temperature") else "full_par"
+    if temperature is None:
+        temperature = getattr(model, "temperature", 1.0)
+    device = device or next(model.parameters()).device
+    labels, probabilities, decisions = [], [], []
+    total_loss, count = 0.0, 0
+    for batch in dataloader:
+        logits, y, margin = logits_from_batch(model, batch, device=device,
+                                              formulation=formulation, temperature=temperature)
+        loss = loss_fn(logits, y)
+        if not torch.isfinite(loss) or not torch.isfinite(logits).all():
+            raise FloatingPointError("Nonfinite validation loss/logits.")
+        p = torch.sigmoid(logits)
+        pred = margin > 0 if formulation == "boundary" else p >= model.threshold
+        labels.append(y.cpu().numpy())
+        probabilities.append(p.cpu().numpy())
+        decisions.append(pred.cpu().numpy())
+        total_loss += float(loss) * len(y)
+        count += len(y)
+    if not count:
+        return BinaryMetrics.empty(), float("nan")
+    return metrics_from_predictions(np.concatenate(labels), np.concatenate(probabilities),
+                                    y_pred=np.concatenate(decisions)), total_loss / count
+
+
+def logits_from_batch(model, batch, *, device, formulation, temperature):
+    """Return differentiable logits, labels and optional untempered margin."""
+    if isinstance(batch, dict):
+        x, y = batch["x"], batch["y"]
+        offset = batch.get("log_nu_b")
+    else:
+        x, y = batch
+        offset = None
+    x, y = x.to(device), y.to(device)
+    if offset is not None:
+        offset = offset.to(device)
+    learned = model(x)
+    logits = output_to_logit(learned, formulation=formulation, log_nu_b=offset, temperature=temperature)
+    margin = boundary_margin(learned, offset) if formulation == "boundary" else None
+    return logits, y, margin

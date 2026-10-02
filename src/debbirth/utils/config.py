@@ -27,10 +27,10 @@ def save_config_json(config, path):
     path.write_text(payload + "\n", encoding="utf-8")
 
 
-def validate_training_mode(config):
+def validate_training_mode(config, *, supports_boundary=False):
     """Fail before data access/output creation for unsupported training modes."""
     if config.data_splits != "train_val_test":
         raise ValueError("Training requires data_splits='train_val_test'; train_test is loader-only.")
-    if config.data_spec.formulation == "boundary":
+    if config.data_spec.formulation == "boundary" and not supports_boundary:
         raise NotImplementedError("Boundary training requires a fixed-offset loss (T05/T06); "
                                   "shared boundary preparation is available now.")

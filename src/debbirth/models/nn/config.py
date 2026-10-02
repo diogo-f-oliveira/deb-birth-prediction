@@ -41,6 +41,7 @@ class TrainDEBBirthNetConfig:
     # Output
     outdir: Optional[Path] = None
     boundary_temperature: float = 1.0
+    checkpoint_selection: str = "final_epoch"  # final_epoch | best_val_loss
 
     def __post_init__(self):
         object.__setattr__(self, "data_dir", resolve_repo_path(self.data_dir))
@@ -51,8 +52,16 @@ class TrainDEBBirthNetConfig:
         if self.scaling_type not in (None, "none", "standardize", "log_standardize"):
             raise ValueError(f"Unknown scaling_type {self.scaling_type!r}.")
         validate_temperature(self.boundary_temperature)
+        if self.checkpoint_selection not in ("final_epoch", "best_val_loss"):
+            raise ValueError("checkpoint_selection must be final_epoch or best_val_loss.")
+        if self.epochs < 1 or self.batch_size < 1:
+            raise ValueError("epochs and batch_size must be positive.")
+        if self.pos_weight is not None:
+            validate_temperature(self.pos_weight)
         if self.data_spec.formulation != "boundary" and self.boundary_temperature != 1.0:
             raise ValueError("boundary_temperature applies only to boundary formulations.")
+        if self.data_spec.formulation == "boundary" and self.net_config is not None and self.net_config.threshold != 0.5:
+            raise ValueError("Boundary training uses strict margin > 0; use an explicit inference threshold override.")
 
     def save_json(self, path) -> None:
         save_config_json(self, path)

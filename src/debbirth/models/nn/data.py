@@ -34,6 +34,20 @@ class PreparedTensorDataset(Dataset):
         return result
 
 
+def feature_tensor(features, feature_names, *, needs_log=False, device="cpu"):
+    """Validate before float32 conversion, shared by training and inference."""
+    values = np.asarray(features, dtype=float)
+    if values.ndim != 2 or values.shape[1] != len(feature_names):
+        raise ValueError("Feature shape does not match the recorded feature order.")
+    validate_numeric(values, feature_names, positive=needs_log)
+    with np.errstate(over="ignore", under="ignore"):
+        converted = values.astype(np.float32)
+    validate_numeric(converted, feature_names, positive=needs_log)
+    if ((values != 0) & (converted == 0)).any():
+        raise ValueError("Features underflow in float32.")
+    return torch.tensor(converted, device=device)
+
+
 def tensor_data_from_prepared(prepared, *, scaling_type="standardize", scaler=None,
                               batch_size=128, device="cpu", num_workers=0, seed=42,
                               aligned_batches=True):
@@ -46,15 +60,7 @@ def tensor_data_from_prepared(prepared, *, scaling_type="standardize", scaler=No
     features = {name: split.features for name, split in prepared.items()}
     needs_log = isinstance(scaler, TorchLogStandardScaler) or (scaler is None and scaling_type == "log_standardize")
     for name, split in prepared.items():
-        validate_numeric(split.features, split.feature_names, positive=needs_log)
-        # Catch overflow/underflow on float32 conversion before a scaler can hide it.
-        with np.errstate(over="ignore", under="ignore"):
-            converted = split.features.astype(np.float32)
-        validate_numeric(converted, split.feature_names, positive=needs_log)
-        underflow = (split.features != 0) & (converted == 0)
-        if underflow.any():
-            bad = [(int(row), split.feature_names[col]) for row, col in np.argwhere(underflow)[:10]]
-            raise ValueError(f"Features underflow in float32 in {name}; invalid (row, column): {bad}")
+        feature_tensor(split.features, split.feature_names, needs_log=needs_log)
     if scaler is None:
         scaled, scaler = fit_and_scale_data_pytorch(features, scaling_type, device=device)
     else:

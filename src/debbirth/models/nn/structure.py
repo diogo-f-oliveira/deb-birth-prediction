@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 
 from .config import DEBBirthNetConfig
+from ...formulations import output_to_logit, boundary_margin, validate_temperature
 
 
 class DEBBirthNet(nn.Module):
@@ -22,7 +23,7 @@ class DEBBirthNet(nn.Module):
                 layers.append(nn.Dropout(p=cfg.dropout))
             in_dim = h
 
-        layers.append(nn.Linear(in_dim, 1))  # logits
+        layers.append(nn.Linear(in_dim, 1))  # unrestricted score, or F = log(Psi)
         self.net = nn.Sequential(*layers)
 
         # store threshold from config
@@ -53,3 +54,32 @@ class DEBBirthNet(nn.Module):
         """Return binary class predictions (0 or 1) by thresholding probabilities using config.threshold."""
         probs = self.predict_proba(x)
         return (probs >= self.threshold).to(torch.int64)
+
+
+class DEBBirthBoundaryNet(DEBBirthNet):
+    """forward(x) returns unrestricted F; maturity never enters the network.
+
+    x is already prepared/scaled. Probability requires an explicit, unscaled
+    log_nu_b offset. The inherited state-dict layout preserves the NN format.
+    """
+
+    def __init__(self, cfg: DEBBirthNetConfig, temperature=1.0):
+        super().__init__(cfg)
+        validate_temperature(temperature)
+        self.temperature = temperature
+
+    def predict_margin(self, x, log_nu_b):
+        return boundary_margin(self(x), log_nu_b)
+
+    def predict_proba(self, x, log_nu_b):
+        return torch.sigmoid(output_to_logit(
+            self(x), formulation="boundary", log_nu_b=log_nu_b, temperature=self.temperature))
+
+    def predict(self, x, log_nu_b):
+        return (self.predict_margin(x, log_nu_b) > 0).to(torch.int64)
+
+
+def build_net(config):
+    if config.data_spec.formulation == "boundary":
+        return DEBBirthBoundaryNet(config.net_config, config.boundary_temperature)
+    return DEBBirthNet(config.net_config)
