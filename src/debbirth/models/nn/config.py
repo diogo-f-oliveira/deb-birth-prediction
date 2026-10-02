@@ -58,6 +58,8 @@ class TrainDEBBirthNetConfig:
             raise ValueError("epochs and batch_size must be positive.")
         if self.pos_weight is not None:
             validate_temperature(self.pos_weight)
+            if not self.use_pos_weight:
+                raise ValueError("pos_weight is set but use_pos_weight is false; enable it explicitly or remove it.")
         if self.data_spec.formulation != "boundary" and self.boundary_temperature != 1.0:
             raise ValueError("boundary_temperature applies only to boundary formulations.")
         if self.data_spec.formulation == "boundary" and self.net_config is not None and self.net_config.threshold != 0.5:

@@ -33,7 +33,8 @@ The loss is stable `BCEWithLogitsLoss(reduction="mean")`. Since T06C the
 default and the shipped `experiments/nn_*.json` configs are unweighted
 (`use_pos_weight=false`, no `pos_weight`), so training and validation report
 ordinary mean BCE. Weighting is an explicit opt-in kept in
-`experiments/nn_*_pos_weight.json`. With
+`experiments/nn_*_pos_weight.json`; a `pos_weight` without
+`use_pos_weight=true` is rejected rather than silently ignored. With
 `use_pos_weight=True`, positive terms receive `N_negative/N_positive`, computed
 on the selected training rows unless explicitly supplied. Validation reuses
 this training weight. The denominator is the number of rows, not the sum of

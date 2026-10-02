@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union, Mapping
 import json
+from math import isfinite
 
 from .functions import DEFAULT_FUNCTION_SET, GPFunctionSet, primitive_identifier, resolve_primitive
 from .constants import GPConstantSet, DEFAULT_CONSTANT_SET, resolve_constant
@@ -103,6 +104,12 @@ class TrainGPConfig:
         if self.data_splits not in SPLIT_TYPES:
             raise ValueError(f"Unknown data_splits {self.data_splits!r}; expected {SPLIT_TYPES}.")
         validate_temperature(self.boundary_temperature)
+        if isinstance(self.class_weights, Mapping):
+            if set(self.class_weights) != {0, 1} or not all(
+                    isinstance(w, (int, float)) and isfinite(w) and w > 0 for w in self.class_weights.values()):
+                raise ValueError("Explicit class_weights must map both 0 and 1 to finite positive weights.")
+        elif self.class_weights not in (None, "balanced"):
+            raise ValueError("class_weights must be None (unweighted), 'balanced' or {0: w0, 1: w1}.")
         if self.data_spec.formulation != "boundary" and self.boundary_temperature != 1.0:
             raise ValueError("boundary_temperature applies only to boundary formulations.")
 

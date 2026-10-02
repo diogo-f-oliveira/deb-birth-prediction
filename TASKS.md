@@ -143,6 +143,8 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
   - gplearn raw/OOB fitness equals ordinary mean log loss over in-bag/out-of-bag rows with 70% subsampling and with full sampling. Explicit `"balanced"` still equals the weighted mean (max relative error 4e-16).
   - Two-epoch default normalized/boundary NN runs report validation loss equal to unweighted mean BCE.
 
+  **Follow-up (2026-10-02, user-approved):** `TrainGPConfig` now rejects `class_weights` other than `None`, `"balanced"` or a mapping of both classes to finite positive weights. NN configs reject a `pos_weight` set while `use_pos_weight` is false. A direct check confirmed the valid/legacy settings, the rejections, and that all shipped and saved configs load as before. The exceptions are the archived/January GP configs with historical function-object strings, an unchanged limitation; their models still load via `load_gp_run`.
+
   Unweighted loss changes the loss scale relative to parsimony, so earlier tuned values do not transfer automatically. The T04 prototype still balances internally as historical evidence; the T06 production trainer must not. No CLI exists yet (T08A), and JSON-based tuning remains T08B.
 
 ### T06D - Make GP symbolic exports agree with runtime semantics
