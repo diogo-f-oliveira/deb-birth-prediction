@@ -105,6 +105,9 @@ log_Psi = predictor.critical_maturity(physical, log=True)
 ```
 
 The lightweight `NNPredictor` bundles model, spec, saved scaler and temperature.
+Its original-parameter, threshold, margin and critical-maturity methods are
+shared with `GPPredictor` through `evaluate/predictor.py` (T06A); outputs are
+unchanged (checked against the saved T05 probes).
 Public methods accept original-parameter arrays ordered `(g, k, v_Hb, f)`, or
 DataFrames with named original columns. `predict_details` returns aligned
 vectors for `learned_output`, `logit`, `probability`, `prediction`, and boundary

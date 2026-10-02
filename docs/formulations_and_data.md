@@ -97,6 +97,15 @@ Saved runs include `run_metadata.json` with source CSV hashes, row counts, split
 
 Existing module entry points use `experiments/gp_full_par.json` and `experiments/nn_full_par.json`, preserving the prior example hyperparameters except that both are now unweighted (T06C). They train and report validation metrics; held-out test evaluation is separate. These examples are not tiny checks and do not reproduce the archived paper settings exactly. T04 selected gplearn and verified separate normalized/boundary GP prototypes; see [the decision and experiment](gp_backend_decision.md). T05 now implements NN normalized/boundary training, checkpoint selection, evaluation-mode loading and original-parameter inference; see [NN interfaces and validation](nn_formulations.md). T06 implements normalized/boundary GP training; see [GP formulations](gp_formulations.md). No common training CLI is included.
 
+## Shared plotting (T06A)
+
+`src/debbirth/plot/boundary.py` plots in original or normalized coordinates.
+
+- **Slice grids:** `slice_grid(x_col, x, y_col, y, **fixed)` builds a mesh in `(g, v_Hb)` at fixed `(k, f)`, in `(gamma, nu_b)` at fixed `k`, or in `(gamma, k)`, and adds the equivalent original parameters for the predictors. Normalized slices are f-free and use `f = 1` unless given.
+- **Decision meshes:** `plot_decision_mesh` and `plot_decision_mesh_with_models` label `gamma`, `nu_b`, `x_b` and `F` correctly. With `reference_lines=True` (the default) they draw the analytical screening lines in the plotted coordinate: `v_Hb = f^3/k` plus `f^3` or `(f/k)^3`, or the normalized `nu_b = 1/k` plus `1` or `1/k^3`. The slice values (k, and f for original axes) are verified to be single-valued instead of being read from the first row; mixed slices raise unless `reference_lines=False`. Existing single-slice notebook calls keep their output.
+- **Critical curves:** `draw_critical_curve` overlays a boundary model's `Psi` (normalized) or `f^3 Psi` (original) from `critical_maturity`. `update_legend` rebuilds the legend with regions, lines, curves and model contours.
+- **Critical surfaces:** `plot_critical_surface` maps `F = log(Psi)` over `(gamma, k)` with its learned zero contour and the analytical `k = 1` reference (`F = 0`).
+
 ## Direct validation results
 
 Executed in conda `debbirth` on CPU. Data access required approved execution outside the sandbox; the data/tests directories are present and were not restored or replaced.

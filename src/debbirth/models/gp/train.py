@@ -11,7 +11,8 @@ from .algorithm import DEBBirthSymbolicClassifier, create_gp_classifier
 from .boundary import GPBoundaryModel, fit_gp_boundary
 from .config import TrainGPConfig
 from .expression import gp_model_text, gp_program_text
-from ...evaluate.predict import evaluate_binary_classifier, metrics_from_predictions
+from .predict import GPPredictor
+from ...data.schema import DatasetSpec
 from ...evaluate.metrics import BinaryMetrics
 from ...utils.config import validate_training_mode
 from ...utils.results import resolve_run_config, save_run_metadata
@@ -28,12 +29,6 @@ def _check_prepared(prepared, cfg):
             raise ValueError("Prepared labels must be binary reached_birth.")
         if (split.log_nu_b is not None) != (cfg.data_spec.formulation == "boundary"):
             raise ValueError("Prepared offsets do not match the formulation.")
-
-
-def evaluate_gp_boundary(model: GPBoundaryModel, split) -> BinaryMetrics:
-    """Validation metrics with the canonical strict decision margin > 0."""
-    return metrics_from_predictions(split.labels, model.predict_proba(split.features, split.log_nu_b),
-                                    y_pred=model.predict(split.features, split.log_nu_b))
 
 
 def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True, *, prepared=None,
@@ -76,12 +71,12 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True, *, prepared=N
     engine = None
     if cfg.data_spec.formulation == "boundary":
         model, engine = fit_gp_boundary(prepared["train"], cfg)
-        val_metrics = evaluate_gp_boundary(model, prepared["val"])
+        val_metrics = GPPredictor(model, cfg.data_spec).evaluate_prepared(prepared["val"])
         history = engine.run_details_
     else:
         model = create_gp_classifier(cfg)
         model.fit(features["train"], targets["train"])
-        val_metrics = evaluate_binary_classifier(model, features["val"], targets["val"])
+        val_metrics = GPPredictor(model, cfg.data_spec).evaluate_prepared(prepared["val"])
         history = getattr(model, "run_details_", None)
 
     # Only save artifacts when requested
@@ -231,6 +226,7 @@ def load_gp_run(outdir: Path) -> Dict[str, Any]:
     Returns a dict:
       {
         "model": loaded joblib model (DEBBirthSymbolicClassifier, or GPBoundaryModel for boundary runs),
+        "predictor": GPPredictor for original-parameter inference (None if the schema is unknown),
         "train_cfg": TrainGPConfig or None,
       }
     """
@@ -257,9 +253,16 @@ def load_gp_run(outdir: Path) -> Dict[str, Any]:
                           RuntimeWarning, stacklevel=2)
             train_cfg_obj = None
 
+    # Archived full-parameter classifiers predate reconstructable configs; their
+    # schema is the historical unscaled (g, k, v_Hb, f) order.
+    spec = train_cfg_obj.data_spec if train_cfg_obj is not None else None
+    if spec is None and isinstance(model, DEBBirthSymbolicClassifier) \
+            and tuple(model.feature_names_no_constants) == tuple(DatasetSpec().feature_cols):
+        spec = DatasetSpec()
     return {
         "model": model,
         "train_cfg": train_cfg_obj,
+        "predictor": GPPredictor(model, spec) if spec is not None else None,
     }
 
 

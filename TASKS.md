@@ -17,9 +17,9 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 - Use conda `debbirth` for code execution. Prefer direct scientific checks and small experiments over new test files. Do not create package infrastructure or a general experiment framework just to complete this backlog.
 - This file is a development plan, not a request to start every experiment now. Execute the scope of the active user request; no background scheduling is implied.
 
-**Current task:** None. T01-T06, T06B and T06C are complete; the NN inference/evaluation portion of T06A is implemented.
+**Current task:** None. T01-T06, T06A, T06B and T06C are complete.
 
-**Next action:** remaining T06A (shared original-parameter GP predictor, coordinate-aware plotting); T06D before relying on simplified GP exports. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
+**Next action:** T06D before relying on simplified GP exports; T07 can proceed independently; T08/T08B before T09. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
 
 ## Model comparison
 
@@ -116,7 +116,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
 ### T06A - Unify inference and simplify evaluation
 
-- [ ] **TODO** | Dependencies: T03, T05, and T06. Implement alongside those tasks where useful.
+- [x] **DONE** | Dependencies: T03, T05, and T06. Implement alongside those tasks where useful.
 - Add a lightweight predictor that bundles the learned model, formulation, feature order, preprocessing, and temperature. Its public inference entry point accepts the original parameters for every formulation; internal prepared-input paths must be explicit to prevent applying transformations twice.
 - Return a consistent positive-class probability shape. For boundary models, also expose signed margin and normalized/original critical maturity. Keep low-level model APIs available for training and historical use.
 - Separate metric computation from model execution: compute metrics from labels, probabilities, and an explicit decision rule. Collect NN predictions and loss in one batched pass instead of collecting the full input dataset and predicting again. Avoid separate model calls for labels and probabilities.
@@ -124,6 +124,16 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 - Adapt plotting so normalized axes and critical surfaces have correct labels and reference bounds. Remove the assumption that every plot has original-variable `f` and `k` annotations taken from the first row; check slice assumptions where they are needed.
 - **Done when:** a small shared input set can be passed through each supported formulation without caller-managed scaling, predictions survive saving/loading, and shared evaluation/plotting works for both original and normalized coordinates. Record direct checks rather than creating a new test suite.
 - **Partial implementation with T05 (2026-09-08):** Added `NNPredictor` for all three NN formulations, original-parameter and explicit prepared-input paths, shape-(N,) positive probabilities, boundary margins/critical maturities, and explicit operating-threshold overrides. NN validation now collects loss/predictions in one batched pass; `metrics_from_predictions` separates execution from metrics and adds MCC, log loss and Brier score with historical metric loading retained. Checks are recorded with T05. T06A remains TODO for GP predictor integration, generic execution consolidation and coordinate-aware plotting; no broader framework was introduced.
+- **Result (2026-10-02):** Completed the GP and plotting parts.
+  - **Shared predictor:** `ParameterPredictor` (`src/debbirth/evaluate/predictor.py`, no backend imports) holds original-parameter parsing, explicit operating thresholds, margins, critical maturity and one-pass `evaluate_prepared`. `NNPredictor` now uses it; its moved methods are unchanged and its outputs match the saved T05 probes exactly.
+  - **GP predictor:** `GPPredictor` (`models/gp/predict.py`) gives GP classifiers and `GPBoundaryModel` the same interface. Classifier outputs come from one program execution and equal gplearn's `predict_proba`/`predict`. `load_gp_run` returns a predictor, including for the archived full-parameter GP via its historical schema. `train_gp_classifier` validates through one predictor pass.
+  - **Decision rules:** boundary decisions are strict in both families. Score models keep their historical rules (GP `> 0.5`, NN `>= threshold`), which differ only at exactly 0.5.
+  - **Plotting:** coordinate-aware (`slice_grid`, `reference_bounds` with verified single-valued slices, normalized labels, `draw_critical_curve`, `update_legend`, `plot_critical_surface` with the analytical k=1 reference). Existing calls keep their output.
+  - **Validation:** `experiments/validate_t06a.py` passed on 500 sampled validation rows (no test data) for eight saved models: archived GP/NN, three T05 NN and three T06 GP runs.
+    - **Interface checks:** shapes, finiteness and probability ranges; identity of the original-parameter and prepared paths; threshold path; strict boundary decisions and logit = margin/T; and critical maturity in log/exp and original/normalized forms, consistent with the decisions.
+    - **Equivalence checks:** scaling invariance for normalized/boundary models (max probability change 7e-16 GP, 0 NN; no decision flips); equality with gplearn APIs; and one-pass metrics reproducing T06's saved validation metrics. The trainer's validation metrics equal the historical evaluator.
+    - **Reload and plots:** exact fresh-process reload of all eight predictors. Original, normalized (k=0.3, 3) and critical-surface plots were inspected; a mixed-f slice is rejected. Archived artifacts and source CSVs were unchanged.
+  - **Run:** `results/runs/2026-10-02T17-07-29-933074_t06a_validation/`. The tuner's test-set evaluation still uses the historical `evaluate_binary_classifier`; JSON-based tuning is T08B.
 
 ### T06B - Create and configure the revised GP function set
 
@@ -270,6 +280,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ## Progress and decisions
 
+- **2026-10-02:** Completed T06A: shared `ParameterPredictor` with `NNPredictor`/`GPPredictor`, one-pass GP validation, and coordinate-aware plotting (normalized axes, critical curves/surfaces, verified slices). Run: `results/runs/2026-10-02T17-07-29-933074_t06a_validation/`.
 - **2026-10-02:** Completed T06: production boundary GP engine (`boundary.py`), normalized/boundary training through `train_gp_classifier`, exact `expression.txt` with original-variable rules; validation run `results/runs/2026-10-02T16-55-47-145588_t06_gp_validation/`. Simplified exports stay with T06D.
 - **2026-10-02:** Completed T06C (unweighted defaults; weighted configs kept as `*_balanced`/`*_pos_weight`) and T06B (revised function set and `gp_normalized`/`gp_boundary` configs with `x_b`) before T06, so T06 pilots use final settings. Decided that GP final-program selection stays at the last generation (generations are tuned); added T08C for alternative policies. Moved export-semantics agreement from T06B to the new T06D after reverting an out-of-scope `symbolic.py` change. Validation run: `results/runs/2026-10-02T16-16-03-355538_t06bc_validation/`.
 - **2026-09-08:** Added T06B for the revised GP function set from `docs/next_steps.md` and T06C for unweighted classifier defaults at the user's request. Both are prerequisites for final protocol/results (T08/T09), with propagation into JSON-based tuning (T08B). Preserve historical weighted models/function sets for disclosed benchmarks. Planning-only update; no code, experiment configs, or models changed.

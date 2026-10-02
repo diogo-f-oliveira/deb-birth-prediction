@@ -1,16 +1,13 @@
 """NN inference from original parameters, with explicit unscaled prepared paths."""
-import numpy as np
-import pandas as pd
 import torch
 
 from .data import feature_tensor
-from ...data.prepare import prepare_features
 from ...data.scalers import TorchLogStandardScaler
-from ...data.schema import FULL_PAR_COLS
+from ...evaluate.predictor import ParameterPredictor
 from ...formulations import output_to_logit, boundary_margin
 
 
-class NNPredictor:
+class NNPredictor(ParameterPredictor):
     """Bundle model, schema, preprocessing and fixed boundary temperature.
 
     Public methods take physical DataFrames or (N, 4) arrays ordered
@@ -29,14 +26,6 @@ class NNPredictor:
         self.model, self.config, self.scaler = model.eval(), config, scaler
         self.spec = config.data_spec
         self.batch_size = batch_size
-
-    def _frame(self, parameters):
-        if isinstance(parameters, pd.DataFrame):
-            return parameters
-        values = np.asarray(parameters, dtype=float)
-        if values.ndim != 2 or values.shape[1] != 4:
-            raise ValueError("Original parameter arrays must have shape (N, 4): g, k, v_Hb, f.")
-        return pd.DataFrame(values, columns=FULL_PAR_COLS)
 
     @torch.inference_mode()
     def _outputs(self, features, feature_names, offset):
@@ -70,50 +59,3 @@ class NNPredictor:
         if boundary:
             result["margin"] = margin.cpu().numpy()
         return result
-
-    def predict_details(self, parameters):
-        features, offset = prepare_features(self._frame(parameters), self.spec)
-        return self._outputs(features.to_numpy(), features.columns, offset)
-
-    def predict_prepared(self, split):
-        """Return details from an unscaled PreparedSplit; never normalize again."""
-        return self._outputs(split.features, split.feature_names, split.log_nu_b)
-
-    def predict_proba(self, parameters):
-        return self.predict_details(parameters)["probability"]
-
-    def predict(self, parameters, *, probability_threshold=None):
-        details = self.predict_details(parameters)
-        if probability_threshold is None:
-            return details["prediction"]
-        if not 0 < probability_threshold < 1:
-            raise ValueError("probability_threshold must be in (0, 1).")
-        # An explicit operating point, separate from canonical strict feasibility.
-        return (details["probability"] >= probability_threshold).astype(int)
-
-    def _require_boundary(self):
-        if self.spec.formulation != "boundary":
-            raise ValueError("Critical maturity and margin require a boundary model.")
-
-    def predict_margin(self, parameters):
-        self._require_boundary()
-        return self.predict_details(parameters)["margin"]
-
-    def critical_maturity(self, parameters, *, normalized=True, log=False):
-        """Return log(Psi)/Psi or log(f^3 Psi)/f^3 Psi.
-
-        Use log=True for extreme thresholds. Explicit exponentiation raises
-        on overflow/underflow; probabilities need no exponentiated threshold.
-        """
-        self._require_boundary()
-        frame = self._frame(parameters)
-        log_critical = self.predict_details(frame)["learned_output"].astype(float)
-        if not normalized:
-            log_critical = log_critical + 3 * np.log(frame["f"].to_numpy(dtype=float))
-        if log:
-            return log_critical
-        with np.errstate(over="ignore", under="ignore"):
-            critical = np.exp(log_critical)
-        if not np.isfinite(critical).all() or (critical == 0).any():
-            raise FloatingPointError("Critical maturity is not representable; request log=True.")
-        return critical

@@ -12,7 +12,48 @@ LABEL_TO_LATEX = {
     'k': r'k',
     'v_Hb': r'v_H^b',
     'f': r'f',
+    'gamma': r'\gamma',
+    'nu_b': r'\nu_b',
+    'log_nu_b': r'\log \nu_b',
+    'x_b': r'x_b',
+    'log_psi': r'F = \log \Psi',
+    'psi': r'\Psi',
 }
+REFERENCE_STYLE = {"primary": dict(color="#4D4D4D", linestyle="--"), "secondary": dict(color="#8C8C8C", linestyle="-.")}
+
+
+def slice_value(df: pd.DataFrame, col: str):
+    """The single value of `col` in a plotted slice; raise if it varies or is absent."""
+    if col not in df:
+        raise ValueError(f"Slice annotation needs column {col!r}.")
+    values = np.unique(df[col].to_numpy())
+    if len(values) != 1:
+        raise ValueError(f"Expected one {col} value in this slice, found {len(values)}; "
+                         "pass reference_lines=False or plot one slice at a time.")
+    return float(values[0])
+
+
+def reference_bounds(df: pd.DataFrame, y_col: str):
+    """Analytical screening lines in the plotted maturity coordinate, with title text.
+
+    Original v_Hb axes at fixed (k, f): v_Hb = f^3/k, plus (f/k)^3 for k > 1 or f^3
+    for k < 1. Normalized nu_b axes at fixed k (f-free): nu_b = 1/k, plus 1/k^3 or 1.
+    Other maturity coordinates get no reference lines.
+    """
+    if y_col == "v_Hb":
+        k, f = slice_value(df, "k"), slice_value(df, "f")
+        title = f"${LABEL_TO_LATEX['k']}={k:.1f}$, ${LABEL_TO_LATEX['f']}={f:.1f}$"
+        primary = (f ** 3 / k, r"$v_H^b = f^3$" if k == 1 else r"$v_H^b = f^3/k$")
+        secondary = ((f / k) ** 3, r"$v_H^b = f^3/k^3$") if k > 1 else (f ** 3, r"$v_H^b = f^3$") if k < 1 else None
+    elif y_col == "nu_b":
+        k = slice_value(df, "k")
+        title = f"${LABEL_TO_LATEX['k']}={k:.1f}$ (normalized, $f$-free)"
+        primary = (1 / k, r"$\nu_b = 1$" if k == 1 else r"$\nu_b = 1/k$")
+        secondary = (1 / k ** 3, r"$\nu_b = 1/k^3$") if k > 1 else (1.0, r"$\nu_b = 1$") if k < 1 else None
+    else:
+        return [], None
+    lines = [(primary[0], primary[1], "primary")] + ([(secondary[0], secondary[1], "secondary")] if secondary else [])
+    return lines, title
 
 
 def plot_decision_mesh(
@@ -27,12 +68,15 @@ def plot_decision_mesh(
         bound_linewidth: float = 1,
         neg_color: str = "#E0F3F8",
         pos_color: str = "#FEE8C8",
+        reference_lines: bool = True,
 ):
     """
     Plot a decision map on a meshgrid using columns x_col (x-axis), y_col (y-axis)
     and decision_col (binary or numeric value to plot).
 
-    Draw horizontal lines at f**3 / k and f**k using f and k taken from df.iloc[0].
+    Axes may be original (g, v_Hb) or normalized (gamma, nu_b) coordinates. With
+    reference_lines, the analytical screening lines of `reference_bounds` are drawn;
+    their slice values (k, and f for original axes) must be single-valued in df.
     Returns (fig, ax).
       neg_color, pos_color: colors used for negative (<=0.5) and positive (>0.5)
       mesh cells respectively. Accepts any Matplotlib color spec.
@@ -69,28 +113,15 @@ def plot_decision_mesh(
     if logy:
         ax.set_yscale("log")
 
-    # Get f and k from the dataframe
-    f = float(df.iloc[0]["f"])
-    k = float(df.iloc[0]["k"])
-
-    # Label axes and add horizontal lines
-    ax.set_xlabel(f"${LABEL_TO_LATEX[x_col]}$", fontsize=12)
-    ax.set_ylabel(f"${LABEL_TO_LATEX[y_col]}$", fontsize=12)
-    ax.set_title(f"${LABEL_TO_LATEX['k']}={k:.1f}$, ${LABEL_TO_LATEX['f']}={f:.1f}$")
-
-    # Get first two colors from Set2 colormap for horizontal lines
-    if k == 1:
-        ax.axhline(y=f ** 3 / k, color="#4D4D4D", linestyle="--",
-                   linewidth=bound_linewidth, label=rf"$v_H^b = f^3$", zorder=3)
-    else:
-        ax.axhline(y=f ** 3 / k, color="#4D4D4D", linestyle="--",
-                   linewidth=bound_linewidth, label=rf"$v_H^b = f^3/k$", zorder=3)
-        if k > 1:
-            ax.axhline(y=(f / k) ** 3, color="#8C8C8C", linestyle="-.",
-                       linewidth=bound_linewidth, label=rf"$v_H^b = f^3/k^3$", zorder=3)
-        if k < 1:
-            ax.axhline(y=f ** 3, color="#8C8C8C", linestyle="-.",
-                       linewidth=bound_linewidth, label=rf"$v_H^b = f^3$", zorder=3)
+    # Label axes; reference lines/title come from the verified slice values.
+    ax.set_xlabel(f"${LABEL_TO_LATEX.get(x_col, x_col)}$", fontsize=12)
+    ax.set_ylabel(f"${LABEL_TO_LATEX.get(y_col, y_col)}$", fontsize=12)
+    if reference_lines:
+        lines, title = reference_bounds(df, y_col)
+        if title:
+            ax.set_title(title)
+        for y, label, style in lines:
+            ax.axhline(y=y, linewidth=bound_linewidth, label=label, zorder=3, **REFERENCE_STYLE[style])
 
     # create legend entries for the decision regions using the provided colors
     pos_patch = Patch(facecolor=pos_color, edgecolor="none", label="Birth is reached")
@@ -190,6 +221,7 @@ def plot_decision_mesh_with_models(
         model_alpha: float = 0.9,
         neg_color: str = "#E0F3F8",
         pos_color: str = "#FEE8C8",
+        reference_lines: bool = True,
 ):
     """
     Draw the base decision mesh (via plot_decision_mesh) and overlay model decision
@@ -226,6 +258,7 @@ def plot_decision_mesh_with_models(
         legend_loc=legend_loc,
         neg_color=neg_color,
         pos_color=pos_color,
+        reference_lines=reference_lines,
     )
 
     # (keep grid computation if callers expect it elsewhere)
@@ -260,16 +293,108 @@ def plot_decision_mesh_with_models(
             model_handles.append(handle)
             model_labels_used.append(labels[i])
 
-    # recreate legend: include region patches (if present), existing handles (hlines), and explicit model handles
+    # expose model contour handles so later overlays can rebuild the full legend
+    ax._model_legend_handles = model_handles
+    ax._model_legend_labels = model_labels_used
+    update_legend(ax, loc=legend_loc)
+
+    return fig, ax
+
+
+def update_legend(ax: plt.Axes, **legend_kwargs):
+    """Rebuild the legend: region patches, labelled lines/curves, then model contours.
+
+    Call after adding overlays such as `draw_critical_curve`; a plain ax.legend()
+    would drop the region patches and contour handles.
+    """
     base_handles, base_labels = ax.get_legend_handles_labels()
+    handles = list(getattr(ax, "_region_legend_handles", [])) + list(base_handles) \
+        + list(getattr(ax, "_model_legend_handles", []))
+    labels = list(getattr(ax, "_region_legend_labels", [])) + list(base_labels) \
+        + list(getattr(ax, "_model_legend_labels", []))
+    if handles:
+        ax.legend(handles, labels, **legend_kwargs)
 
-    # get region handles/labels exposed by plot_decision_mesh (if available)
-    region_handles = getattr(ax, "_region_legend_handles", [])
-    region_labels = getattr(ax, "_region_legend_labels", [])
 
-    all_handles = list(region_handles) + list(base_handles) + model_handles
-    all_labels = list(region_labels) + list(base_labels) + model_labels_used
-    if all_handles:
-        ax.legend(all_handles, all_labels, loc=legend_loc)
+def slice_grid(x_col: str, x_values, y_col: str, y_values, **fixed) -> pd.DataFrame:
+    """Mesh of two coordinates plus fixed values, with original parameters added.
 
+    Coordinates may be original (g, k, v_Hb, f) or normalized (gamma, nu_b, k).
+    Normalized slices are f-free, so g = gamma * f and v_Hb = nu_b * f^3 with
+    f = 1 unless given; predictors then receive equivalent original parameters.
+    """
+    X, Y = np.meshgrid(np.asarray(x_values, dtype=float), np.asarray(y_values, dtype=float))
+    df = pd.DataFrame({x_col: X.ravel(), y_col: Y.ravel()})
+    for name, value in fixed.items():
+        df[name] = float(value)
+    if {"gamma", "nu_b"} & set(df):
+        if "f" not in df:
+            df["f"] = 1.0
+        if "gamma" in df and "g" not in df:
+            df["g"] = df["gamma"] * df["f"]
+        if "nu_b" in df and "v_Hb" not in df:
+            df["v_Hb"] = df["nu_b"] * df["f"] ** 3
+    missing = [c for c in ("g", "k", "v_Hb", "f") if c not in df]
+    if missing:
+        raise ValueError(f"Slice does not determine original parameters {missing}; fix them explicitly.")
+    return df
+
+
+def draw_critical_curve(ax: plt.Axes, x, critical, *, label: str, color: str = "k", linewidth: float = 1.5,
+                        linestyle: str = "-", zorder: int = 5, alpha: float = 0.9):
+    """Plot a boundary model's critical maturity against an x coordinate.
+
+    In normalized axes pass Psi(gamma, k); in original axes pass f^3 * Psi(g/f, k)
+    (e.g. predictor.critical_maturity(..., normalized=False)). Feasible points lie
+    strictly below the curve. Returns the line handle.
+    """
+    (line,) = ax.plot(x, critical, color=color, linewidth=linewidth, linestyle=linestyle,
+                      zorder=zorder, alpha=alpha, label=label)
+    return line
+
+
+def plot_critical_surface(
+        df: pd.DataFrame,
+        value_col: str = "log_psi",
+        x_col: str = "gamma",
+        y_col: str = "k",
+        logx: bool = True,
+        logy: bool = True,
+        title: str = None,
+        cmap: str = "RdBu_r",
+):
+    """Map F = log(Psi) over (gamma, k) with its zero contour and the k = 1 reference.
+
+    Analytically Psi(gamma, 1) = 1, i.e. F = 0 on k = 1; the dotted line marks where
+    the learned zero contour should lie. Colors are centred at F = 0. Returns (fig, ax).
+    """
+    from matplotlib.colors import TwoSlopeNorm
+
+    x_vals = np.sort(df[x_col].unique())
+    y_vals = np.sort(df[y_col].unique())
+    Z = df.pivot(index=y_col, columns=x_col, values=value_col).reindex(index=y_vals, columns=x_vals).to_numpy()
+    Zm = np.ma.masked_invalid(Z)
+    fig, ax = plt.subplots(figsize=(6, 5), tight_layout=True)
+    limit = float(np.nanmax(np.abs(Z))) or 1.0
+    pcm = ax.pcolormesh(*np.meshgrid(x_vals, y_vals), Zm, shading="auto", cmap=cmap,
+                        norm=TwoSlopeNorm(vcenter=0.0, vmin=-limit, vmax=limit))
+    fig.colorbar(pcm, ax=ax, label=f"${LABEL_TO_LATEX.get(value_col, value_col)}$")
+    handles = []
+    if np.nanmin(Z) < 0 < np.nanmax(Z):
+        ax.contour(x_vals, y_vals, Zm, levels=[0.0], colors="k", linewidths=1.2)
+        handles.append(Line2D([0], [0], color="k", linewidth=1.2, label=r"learned $F = 0$"))
+    if y_col == "k" and y_vals.min() <= 1 <= y_vals.max():
+        ax.axhline(1.0, color="#4D4D4D", linestyle=":", linewidth=1.2)
+        handles.append(Line2D([0], [0], color="#4D4D4D", linestyle=":", linewidth=1.2,
+                              label=r"$k = 1$ (analytical $F = 0$)"))
+    if logx:
+        ax.set_xscale("log")
+    if logy:
+        ax.set_yscale("log")
+    ax.set_xlabel(f"${LABEL_TO_LATEX.get(x_col, x_col)}$", fontsize=12)
+    ax.set_ylabel(f"${LABEL_TO_LATEX.get(y_col, y_col)}$", fontsize=12)
+    if title:
+        ax.set_title(title)
+    if handles:
+        ax.legend(handles=handles, loc="lower left")
     return fig, ax

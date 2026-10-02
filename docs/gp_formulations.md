@@ -20,7 +20,19 @@ L = sum_i w_i * BCE(y_i, sigmoid((F_i - log_nu_b_i) / T)) / sum_i w_i     over a
 - **Temperature:** `boundary_temperature` is the fixed, positive training temperature. The GP config must keep `metric="log loss"` and `transformer="sigmoid"`, which describe this fixed loss. Parsimony must be a finite nonnegative number; `"auto"` is undefined when invalid candidates have infinite loss.
 - **Final program:** the lowest raw (unpenalized) training loss in the last generation, which is gplearn's own policy. Parsimony acts only in tournaments, and the number of generations is the tuned quantity. Alternative policies are T08C.
 
-`fit_gp_boundary` returns a `GPBoundaryModel` and the engine. The engine carries the dataset-bound metric and history, is only for diagnostics of that fit, and is never saved. `GPBoundaryModel` holds the executable tree with its metric removed, the feature order, the constants and T. It exposes `predict_boundary(X)` (F), `predict_margin(X, log_nu_b)`, `predict_proba(X, log_nu_b)` with shape `(N,)`, and `predict(X, log_nu_b)` with the strict `margin > 0` rule and no tolerance. Inputs are prepared, unscaled, finite and positive. Nonfinite F raises. Original-parameter inference and a shared predictor remain T06A.
+`fit_gp_boundary` returns a `GPBoundaryModel` and the engine. The engine carries the dataset-bound metric and history, is only for diagnostics of that fit, and is never saved. `GPBoundaryModel` holds the executable tree with its metric removed, the feature order, the constants and T. It exposes `predict_boundary(X)` (F), `predict_margin(X, log_nu_b)`, `predict_proba(X, log_nu_b)` with shape `(N,)`, and `predict(X, log_nu_b)` with the strict `margin > 0` rule and no tolerance. Inputs are prepared, unscaled, finite and positive. Nonfinite F raises. For original-parameter inference use `GPPredictor` (below).
+
+## Original-parameter inference and evaluation (T06A)
+
+`GPPredictor(model, data_spec)` in `src/debbirth/models/gp/predict.py` has the same interface as `NNPredictor`. Both share `ParameterPredictor` (`src/debbirth/evaluate/predictor.py`).
+
+- **Inputs:** DataFrames or `(N, 4)` arrays ordered `(g, k, v_Hb, f)` go through shared preparation. `predict_prepared(split)` explicitly takes an unscaled `PreparedSplit` and never normalizes again.
+- **Outputs:** `predict_details` returns `(N,)` vectors `learned_output`, `logit`, `probability`, `prediction`, plus `margin` for boundary models. `predict_margin` and `critical_maturity(normalized=..., log=...)` require a boundary model.
+- **Thresholds:** `predict(..., probability_threshold=t)` and `evaluate_prepared(split, probability_threshold=t)` apply an explicit operating point, `probability >= t`, kept separate from the canonical decision.
+- **Canonical decisions:** boundary models use the strict `margin > 0` in both families. Score models keep their historical rules. GP uses gplearn's argmax, so `probability > 0.5` and a tie is infeasible. NN uses `probability >= net_config.threshold`. These differ only at exactly 0.5.
+- **Classifier outputs:** GP classifier outputs come from one program execution and reproduce gplearn's `predict_proba`/`predict` exactly. Scores may be infinite, but NaN scores raise.
+
+`load_gp_run` returns a predictor. The archived full-parameter GP's training config cannot be reconstructed, so its predictor uses the historical unscaled `(g, k, v_Hb, f)` schema. `train_gp_classifier` computes validation metrics through `GPPredictor.evaluate_prepared`: one prediction pass whose classifier metrics equal the historical two-call `evaluate_binary_classifier` used by the tuner.
 
 ## Saved runs
 
@@ -32,7 +44,7 @@ Saved runs keep the existing layout:
 - `model/best_program.txt`: the exact program.
 - `model/expression.txt`.
 
-`expression.txt` gives the exact gplearn program with feature and constant names, the definitions of the derived inputs, the constant values, and the runtime definition of every primitive in the function set. It also states the original-variable rule. No algebraic simplification is applied. The text documents the model; the joblib artifact is the inference object. Simplified SymPy/MATLAB exports drop protected semantics and are tracked as T06D. `load_gp_run` returns the saved model for either type.
+`expression.txt` gives the exact gplearn program with feature and constant names, the definitions of the derived inputs, the constant values, and the runtime definition of every primitive in the function set. It also states the original-variable rule. No algebraic simplification is applied. The text documents the model; the joblib artifact is the inference object. Simplified SymPy/MATLAB exports drop protected semantics and are tracked as T06D. `load_gp_run` returns the saved model for either type and a `GPPredictor`.
 
 Example (8 generations on 2,000 training rows, not tuned):
 
