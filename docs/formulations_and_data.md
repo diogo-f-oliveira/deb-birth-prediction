@@ -85,7 +85,7 @@ Shipped experiment configs follow the default. The previous weighted versions ar
 
 The repository's protected primitives are used, not gplearn's stock `div`/`log`. Historical sets (`arithmetic`, `default`, `extended`), primitive definitions and serialized names are unchanged for archived models. Constants are chosen separately. The new configs use the same named constants as the full-parameter example (`c1, c2, c3, c1_2, c1_3, sqrt2, sqrt3, c0`); `sqrt2`/`sqrt3` are constant terminals, not the excluded `sqrt` operator.
 
-`experiments/gp_normalized.json` (features `gamma, k, nu_b, x_b`) and `experiments/gp_boundary.json` (features `gamma, k, x_b`) select the revised set, `include_x_b=true` and unweighted loss, with the full-parameter example's untuned evolution settings. Setting `include_x_b=false` gives the otherwise matched ablation. The boundary config loads, but the production GP trainer still rejects boundary training until T06.
+`experiments/gp_normalized.json` (features `gamma, k, nu_b, x_b`) and `experiments/gp_boundary.json` (features `gamma, k, x_b`) select the revised set, `include_x_b=true` and unweighted loss, with the full-parameter example's untuned evolution settings. Setting `include_x_b=false` gives the otherwise matched ablation. Both train through `train_gp_classifier` (see [GP formulations](gp_formulations.md)).
 
 ### Symbolic export semantics
 
@@ -95,7 +95,7 @@ Constructing or loading a config creates no directories. Relative data/output pa
 
 Saved runs include `run_metadata.json` with source CSV hashes, row counts, split policy, configuration, Python/dependency versions, Git revision, and source-code hashes identifying uncommitted code. This does not bundle the source code or datasets themselves. Explicitly saving a run creates its directories; explicitly saving a config creates the requested JSON parent.
 
-Existing module entry points use `experiments/gp_full_par.json` and `experiments/nn_full_par.json`, preserving the prior example hyperparameters except that both are now unweighted (T06C). They train and report validation metrics; held-out test evaluation is separate. These examples are not tiny checks and do not reproduce the archived paper settings exactly. T04 selected gplearn and verified separate normalized/boundary GP prototypes; see [the decision and experiment](gp_backend_decision.md). T05 now implements NN normalized/boundary training, checkpoint selection, evaluation-mode loading and original-parameter inference; see [NN interfaces and validation](nn_formulations.md). The production GP trainer still rejects boundary training pending T06. No common training CLI is included.
+Existing module entry points use `experiments/gp_full_par.json` and `experiments/nn_full_par.json`, preserving the prior example hyperparameters except that both are now unweighted (T06C). They train and report validation metrics; held-out test evaluation is separate. These examples are not tiny checks and do not reproduce the archived paper settings exactly. T04 selected gplearn and verified separate normalized/boundary GP prototypes; see [the decision and experiment](gp_backend_decision.md). T05 now implements NN normalized/boundary training, checkpoint selection, evaluation-mode loading and original-parameter inference; see [NN interfaces and validation](nn_formulations.md). T06 implements normalized/boundary GP training; see [GP formulations](gp_formulations.md). No common training CLI is included.
 
 ## Direct validation results
 

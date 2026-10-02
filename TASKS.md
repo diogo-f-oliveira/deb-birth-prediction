@@ -17,9 +17,9 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 - Use conda `debbirth` for code execution. Prefer direct scientific checks and small experiments over new test files. Do not create package infrastructure or a general experiment framework just to complete this backlog.
 - This file is a development plan, not a request to start every experiment now. Execute the scope of the active user request; no background scheduling is implied.
 
-**Current task:** None. T01-T05, T06B and T06C are complete; the NN inference/evaluation portion of T06A is implemented.
+**Current task:** None. T01-T06, T06B and T06C are complete; the NN inference/evaluation portion of T06A is implemented.
 
-**Next action:** T06 (production normalized/boundary GP with the revised set, `x_b` and unweighted loss from `experiments/gp_{normalized,boundary}.json`), followed by remaining T06A integration/plotting. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
+**Next action:** remaining T06A (shared original-parameter GP predictor, coordinate-aware plotting); T06D before relying on simplified GP exports. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
 
 ## Model comparison
 
@@ -97,7 +97,7 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 
 ### T06 - Implement normalized and boundary GP models
 
-- [ ] **TODO** | Dependencies: T03 and T04.
+- [x] **DONE** | Dependencies: T03 and T04.
 - Implement both formulations with gplearn as selected in T04 (`docs/gp_backend_decision.md`). For the boundary model, evolve `F(gamma, k)` with the fixed offset outside the tree and a documented positive training temperature. Integrate the prototype's explicit row/mask contract; keep loss normalization separate from tournament parsimony. **Decision (2026-10-02):** keep gplearn's last-generation final-program selection (raw loss); the number of generations is a tuned hyperparameter, analogous to final-epoch NN checkpoints under dropout. Document it; alternative selection policies are T08C, outside T06.
 - Use the repository's protected primitives and named constant terminals in the boundary engine rather than the prototype's stock `div`/`log` and `const_range` constants (displayed random constants are rounded). Constant columns must not be mistaken for, or widen, the permitted `(gamma, k[, x_b])` features. Exports used for inference depend on T06D; until then use the executable gplearn program.
 - Integrate the revised function set and x_b feature configuration specified in T06B; retain historical primitive definitions for old artifacts. Apply T06C's unweighted defaults to the production boundary loss as well as the normalized classifier.
@@ -105,6 +105,14 @@ The target is practical feasibility: retain negative labels for get_lb2 timeouts
 - Keep historical gplearn class/module import paths and primitive definitions available for loading archived artifacts. Confine backend-specific evolution and serialization to the GP implementation; analysis code should not need to access gplearn private attributes.
 - Run a small evolution for each formulation. Confirm finite fitness, row alignment, save/load prediction agreement, and numerical agreement between the executable expression and any export used for inference.
 - **Done when:** both variants train and produce reusable symbolic models, with short-run artifacts and an example boundary rule. Do not claim simplified expressions preserve protected semantics without checking.
+- **Result (2026-10-02):** Implemented in `src/debbirth/models/gp/boundary.py`, `expression.py` and `train.py`; documented in `docs/gp_formulations.md`.
+  - **Boundary engine:** `fit_gp_boundary` evolves F with gplearn's SymbolicRegressor and the T04 fixed-offset BCE. It reuses the prototype's audited loss and backend contract. Only `gamma, k[, x_b]` are terminals. It uses registered primitives and named constant columns with no ephemeral constants, unit weights by default, and the configured training temperature. The final program is the last generation's lowest raw loss.
+  - **Inference artifact:** `GPBoundaryModel` holds no training context and exposes F, margin, probability and strict `margin > 0`. Normalized/full_par use the existing classifier.
+  - **Trainer:** `train_gp_classifier` handles all formulations and accepts explicit row-aligned `prepared` subsets, like the NN trainer. Runs record loss, decision and selection policy. Saved runs add `model/expression.txt`: the exact program with named features/constants, runtime primitive definitions and the original-variable rule.
+  - **Exports:** no SymPy simplification; simplified exports remain T06D. The joblib model is the inference artifact, so no text export is used for inference.
+  - **Validation:** `experiments/validate_gp_formulations.py` passed on 2,000/500 sampled train/val rows (no test data) for normalized+`x_b`, boundary+`x_b` (T=1) and boundary without `x_b` (T=0.7). It covered independent fitness recomputation for all retained programs (718/575, plus 250 with explicit balanced weights), the final-program policy, permitted terminals/primitives, serial/two-process identity, shuffle alignment, metric context rejection, maturity monotonicity, strict ties, temperature-invariant decisions, saved-metric recomputation, and exact in-process and fresh-process reload. Archived artifacts and source CSVs were unchanged. A one-generation smoke run trained all three formulations through ordinary CSV loading.
+  - **Example boundary rule (8 generations, not tuned):** `F = sub(sqrt2, k)`, i.e. `v_Hb < f^3 * exp(sqrt(2) - k)`. It ignores gamma and violates `F(gamma, 1) = 0`; it demonstrates execution only.
+  - **Run:** `results/runs/2026-10-02T16-55-47-145588_t06_gp_validation/`. Tuning/temperature remain T08/T08B. A shared original-parameter GP predictor and plotting remain T06A.
 
 ### T06A - Unify inference and simplify evaluation
 
@@ -262,6 +270,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ## Progress and decisions
 
+- **2026-10-02:** Completed T06: production boundary GP engine (`boundary.py`), normalized/boundary training through `train_gp_classifier`, exact `expression.txt` with original-variable rules; validation run `results/runs/2026-10-02T16-55-47-145588_t06_gp_validation/`. Simplified exports stay with T06D.
 - **2026-10-02:** Completed T06C (unweighted defaults; weighted configs kept as `*_balanced`/`*_pos_weight`) and T06B (revised function set and `gp_normalized`/`gp_boundary` configs with `x_b`) before T06, so T06 pilots use final settings. Decided that GP final-program selection stays at the last generation (generations are tuned); added T08C for alternative policies. Moved export-semantics agreement from T06B to the new T06D after reverting an out-of-scope `symbolic.py` change. Validation run: `results/runs/2026-10-02T16-16-03-355538_t06bc_validation/`.
 - **2026-09-08:** Added T06B for the revised GP function set from `docs/next_steps.md` and T06C for unweighted classifier defaults at the user's request. Both are prerequisites for final protocol/results (T08/T09), with propagation into JSON-based tuning (T08B). Preserve historical weighted models/function sets for disclosed benchmarks. Planning-only update; no code, experiment configs, or models changed.
 

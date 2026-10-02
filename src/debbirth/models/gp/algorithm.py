@@ -120,7 +120,7 @@ class DEBBirthSymbolicClassifier(SymbolicClassifier):
 def create_gp_classifier(cfg: TrainGPConfig) -> DEBBirthSymbolicClassifier:
     """Instantiate a DEBBirthSymbolicClassifier from TrainGPConfig."""
     if cfg.data_spec.formulation == "boundary":
-        raise NotImplementedError("The existing classifier cannot train a boundary without fixed-offset fitness (T04/T06).")
+        raise NotImplementedError("Boundary GP uses the fixed-offset engine in boundary.fit_gp_boundary.")
 
     base_feature_names = None
     if cfg.data_spec is not None:

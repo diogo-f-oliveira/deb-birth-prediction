@@ -8,46 +8,90 @@ import numpy as np
 
 from .data import load_data_gp
 from .algorithm import DEBBirthSymbolicClassifier, create_gp_classifier
+from .boundary import GPBoundaryModel, fit_gp_boundary
 from .config import TrainGPConfig
-from ...evaluate.predict import evaluate_binary_classifier
+from .expression import gp_model_text, gp_program_text
+from ...evaluate.predict import evaluate_binary_classifier, metrics_from_predictions
 from ...evaluate.metrics import BinaryMetrics
 from ...utils.config import validate_training_mode
 from ...utils.results import resolve_run_config, save_run_metadata
 # from .symbolic import model_program_to_sympy_strings
 
 
-def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, Any]:
-    """Train a GP classifier and evaluate it on the validation split.
+def _check_prepared(prepared, cfg):
+    if not {"train", "val"} <= prepared.keys():
+        raise ValueError("Prepared training requires train and val records.")
+    for name, split in prepared.items():
+        if not len(split.labels) or tuple(split.feature_names) != tuple(cfg.data_spec.feature_cols):
+            raise ValueError(f"Empty or mismatched prepared feature schema: {name}.")
+        if not np.isin(split.labels, [0, 1]).all():
+            raise ValueError("Prepared labels must be binary reached_birth.")
+        if (split.log_nu_b is not None) != (cfg.data_spec.formulation == "boundary"):
+            raise ValueError("Prepared offsets do not match the formulation.")
+
+
+def evaluate_gp_boundary(model: GPBoundaryModel, split) -> BinaryMetrics:
+    """Validation metrics with the canonical strict decision margin > 0."""
+    return metrics_from_predictions(split.labels, model.predict_proba(split.features, split.log_nu_b),
+                                    y_pred=model.predict(split.features, split.log_nu_b))
+
+
+def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True, *, prepared=None,
+                        data_metadata=None) -> Dict[str, Any]:
+    """Train a GP model and evaluate it on the validation split.
+
+    full_par/normalized evolve a classifier score; boundary evolves F = log(Psi)
+    with the fixed-offset loss (see boundary.py). Explicit row-aligned
+    `prepared` train/val records (test optional and unused) replace CSV
+    loading; the caller then supplies provenance metadata.
 
     Args:
         cfg: TrainGPConfig
         save_run: if True, create the run directory and persist artifacts (default True).
                   if False, no directory is created and nothing is saved.
     """
-    validate_training_mode(cfg)
+    validate_training_mode(cfg, supports_boundary=True)
     # Set random seeds
     np.random.seed(cfg.seed)
     random.seed(cfg.seed)
 
-    features, targets, prepared, data_metadata = load_data_gp(cfg, return_prepared=True)
+    if prepared is None:
+        features, targets, prepared, data_metadata = load_data_gp(cfg, return_prepared=True)
+    else:
+        _check_prepared(prepared, cfg)
+        features = {name: split.features for name, split in prepared.items()}
+        targets = {name: split.labels for name, split in prepared.items()}
+    weighting = "unweighted" if cfg.class_weights is None else f"class_weights={cfg.class_weights!r}"
+    data_metadata = dict(data_metadata or {})
+    data_metadata.update({
+        "loss": (f"mean BCE of sigmoid((F - log_nu_b)/T) over active training rows ({weighting})"
+                 if cfg.data_spec.formulation == "boundary"
+                 else f"gplearn log loss of sigmoid(S) over active training rows ({weighting})"),
+        "decision": ("F - log_nu_b > 0; equality infeasible; no tolerance" if cfg.data_spec.formulation == "boundary"
+                     else "sigmoid(S) > 0.5 (gplearn argmax; ties infeasible)"),
+        "final_program_selection": "gplearn: lowest raw (unpenalized) training loss in the last generation",
+        "temperature_policy": "fixed training temperature; no calibration performed",
+    })
 
-    # Assume data is already correctly formatted.
-    X_train = features["train"]
-    X_val = features["val"]
-    y_train = targets["train"]
-    y_val = targets["val"]
-
-    model = create_gp_classifier(cfg)
-    model.fit(X_train, y_train)
-
-    val_metrics = evaluate_binary_classifier(model, X_val, y_val)
+    engine = None
+    if cfg.data_spec.formulation == "boundary":
+        model, engine = fit_gp_boundary(prepared["train"], cfg)
+        val_metrics = evaluate_gp_boundary(model, prepared["val"])
+        history = engine.run_details_
+    else:
+        model = create_gp_classifier(cfg)
+        model.fit(features["train"], targets["train"])
+        val_metrics = evaluate_binary_classifier(model, features["val"], targets["val"])
+        history = getattr(model, "run_details_", None)
 
     # Only save artifacts when requested
     if save_run:
-        cfg = save_gp_run(model=model, cfg=cfg, val_metrics=val_metrics, data_metadata=data_metadata)
+        cfg = save_gp_run(model=model, cfg=cfg, val_metrics=val_metrics, data_metadata=data_metadata,
+                          history=history)
 
     return {
         "model": model,
+        "engine": engine,  # boundary only: dataset-bound engine for diagnostics; never saved
         "train_config": cfg,
         "outdir": cfg.outdir if save_run else None,
         "prepared": prepared,
@@ -55,21 +99,25 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True) -> Dict[str, 
         "val_metrics": val_metrics,
         "features": features,
         "targets": targets,
-        "history": getattr(model, "run_details_", None),
-        "best_program": str(model._program) if hasattr(model, "_program") else None,
+        "history": history,
+        "best_program": gp_program_text(model),
     }
 
 
-def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_metrics: BinaryMetrics,
-                save_all_programs: bool = False, data_metadata=None) -> TrainGPConfig:
+def save_gp_run(*, model, cfg: TrainGPConfig, val_metrics: BinaryMetrics,
+                save_all_programs: bool = False, data_metadata=None, history=None) -> TrainGPConfig:
     """Persist model + config + validation metrics + run details.
+
+    `model` is a DEBBirthSymbolicClassifier or a GPBoundaryModel. A boundary
+    model holds no training context; pass its engine's run_details_ as `history`.
 
     Args:
       save_all_programs: if False (default) remove the attribute '_programs' from the model
                          before saving to avoid storing all intermediate programs. The original
                          model object is restored after saving. If True, the model is saved as-is.
     """
-    cfg = resolve_run_config(cfg, cfg.run_name or "DEBBirthSymbolicClassifier")
+    boundary = isinstance(model, GPBoundaryModel)
+    cfg = resolve_run_config(cfg, cfg.run_name or ("DEBBirthGPBoundary" if boundary else "DEBBirthSymbolicClassifier"))
 
     # Save train config
     cfg.save_json(cfg.outdir / "train_gp_config.json")
@@ -80,12 +128,14 @@ def save_gp_run(*, model: DEBBirthSymbolicClassifier, cfg: TrainGPConfig, val_me
 
     (cfg.outdir / "model").mkdir(exist_ok=True)
 
-    program_str = None
-    if hasattr(model, "_program") and model._program is not None:  # type: ignore[attr-defined]
-        program_str = str(model._program)  # type: ignore[attr-defined]
+    (cfg.outdir / "model" / "best_program.txt").write_text(gp_program_text(model), encoding="utf-8")
+    (cfg.outdir / "model" / "expression.txt").write_text(gp_model_text(model, cfg), encoding="utf-8")
 
-    if program_str is not None:
-        (cfg.outdir / "model" / "best_program.txt").write_text(program_str + "", encoding="utf-8")
+    if boundary:
+        joblib_dump(model, cfg.outdir / "model" / "gp_model.joblib")
+        if history is not None:
+            write_gp_run_history(history, cfg.outdir / "history.csv")
+        return cfg
 
         # # Convert model program to sympy simplified string + srepr and save
         # try:
@@ -180,7 +230,7 @@ def load_gp_run(outdir: Path) -> Dict[str, Any]:
 
     Returns a dict:
       {
-        "model": loaded joblib model,
+        "model": loaded joblib model (DEBBirthSymbolicClassifier, or GPBoundaryModel for boundary runs),
         "train_cfg": TrainGPConfig or None,
       }
     """

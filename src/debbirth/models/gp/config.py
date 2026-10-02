@@ -16,7 +16,7 @@ from ...data.load import SPLIT_TYPES
 
 @dataclass(frozen=True)
 class GPConfig:
-    """Hyperparameters for gplearn.genetic.SymbolicClassifier."""
+    """GP hyperparameters for the classifier score or the boundary F engine (boundary.py)."""
 
     # Evolution
     population_size: int = 1000
