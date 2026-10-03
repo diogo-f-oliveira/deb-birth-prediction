@@ -44,6 +44,8 @@ class TrainDEBBirthNetConfig:
     run_name: Optional[str] = None
     boundary_temperature: float = 1.0
     checkpoint_selection: str = "final_epoch"  # final_epoch | best_val_loss
+    # Validation row every n epochs (and the last); 0 disables (T08D). Validation still runs every epoch.
+    progress_every: int = 1
 
     def __post_init__(self):
         object.__setattr__(self, "data_dir", resolve_repo_path(self.data_dir))
@@ -56,6 +58,9 @@ class TrainDEBBirthNetConfig:
         validate_temperature(self.boundary_temperature)
         if self.checkpoint_selection not in ("final_epoch", "best_val_loss"):
             raise ValueError("checkpoint_selection must be final_epoch or best_val_loss.")
+        if isinstance(self.progress_every, bool) or not isinstance(self.progress_every, int) \
+                or self.progress_every < 0:
+            raise ValueError("progress_every must be a nonnegative integer (0 disables progress logging).")
         if self.epochs < 1 or self.batch_size < 1:
             raise ValueError("epochs and batch_size must be positive.")
         if self.pos_weight is not None:

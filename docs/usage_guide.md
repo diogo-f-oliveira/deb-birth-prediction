@@ -191,7 +191,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation norm
 
 3. **Inspect the run directory** `results/runs/<timestamp>_DEBBirthSymbolicClassifier/`:
    - `train_gp_config.json`, `run_metadata.json` (data hashes, loss, decision rule, selection policy, versions, code hashes), and `cli_invocation.json` when launched from the CLI;
-   - `metrics/val_metrics.json`, `history.csv`;
+   - `metrics/val_metrics.json`, `history.csv`, `progress.csv` (per generation, written during training);
    - `model/gp_model.joblib`, `model/best_program.txt`, `model/expression.txt`.
 
 4. **Load and predict** (section 6). As with NN, `out["predictor"]` is ready to use after training, including unsaved runs; `load_gp_run(out["outdir"])["predictor"]` gives the same predictions after reloading.
@@ -255,7 +255,7 @@ To reproduce the historical balanced setting, use `gp_full_par_balanced.json`. T
 
 3. **Inspect the run directory** `results/runs/<timestamp>_<run_name>/`. The default name is `DEBBirthNet`, or `DEBBirthBoundaryNet` for boundary runs; set `run_name` in the config to change it. The directory contains:
    - `train_nn_config.json`, `run_metadata.json`, `checkpoint.json` (selection rule and epoch), and `cli_invocation.json` when launched from the CLI;
-   - `history.csv` (per epoch), `metrics/val_metrics.json` (selected epoch);
+   - `history.csv` (per epoch), `progress.csv` (per epoch, written during training), `metrics/val_metrics.json` (selected epoch);
    - `model/model_state_dict.pth`, `model/scaler.pth` (absent when `scaling_type="none"`).
 4. **Load and predict** (section 6). The saved scaler is applied automatically.
 
@@ -284,6 +284,29 @@ To reproduce the historical balanced setting, use `gp_full_par_balanced.json`. T
    ```
 
 3. **Load and predict** (section 6), including margins and critical maturity.
+
+### 5.7 Validation progress during training
+
+Every GP generation and NN epoch is scored on the validation split while the run is training (T08D). Each step prints one line in the same format for both families, for example:
+
+```text
+[generation 4/5] val_bce=0.2799 f1_macro=0.8684 mcc=0.7369 f1_pos=0.8473 f1_neg=0.8895 | best_length=13 | 8.9s
+[epoch 2/3] val_bce=0.0699 f1_macro=0.9731 mcc=0.9463 f1_pos=0.9691 f1_neg=0.9770 | train_loss=0.1062 | 7.5s
+```
+
+Saved runs also write `progress.csv` in the run directory. The path is printed when training starts.
+
+- **Writing.** The header is written at the start, then one row is appended and flushed per step. The file can be followed while the run trains, and an interrupted run keeps its completed rows. The run directory is created before training for this reason, so an interrupted run leaves a directory with only `progress.csv`.
+- **Shared columns.**
+  - `step_kind` (`generation`/`epoch`) and `step`, the number of completed generations or epochs. For GP this is gplearn's generation index + 1, so the last step equals `generations`.
+  - `elapsed_s` (since training began) and `val_eval_s` (time to score this step).
+  - `val_bce`: the unweighted mean BCE of the classification logit on validation, computed in float64 for every formulation. For boundary models the logit is `(F - log nu_b)/T`. It stays unweighted when class weighting is enabled.
+  - Every `BinaryMetrics` field: macro-F1, per-class precision/recall/F1, MCC, AUROC/AP, confusion counts, log loss and Brier score.
+- **GP columns.** `best_length` and the population `average_length`. Each GP row scores the generation's lowest raw-loss program, which is the program the run would return if it stopped at that step. Logging only reads the population, so the final program is identical with logging on or off. gplearn's own `verbose` table is not printed while progress logging is on.
+- **NN columns.** `train_loss` (running minibatch mean during the epoch) and `val_loss`, the training loss function on validation (weighted when `use_pos_weight` is on) and used by `best_val_loss`. With `best_val_loss`, the saved metrics correspond to the selected epoch's row, not necessarily the last.
+- **Frequency.** `progress_every` in the training config (GP and NN, default 1) logs every n-th step and always the last; `0` disables progress logging. For GP, `progress_every=0` restores gplearn's `verbose` table. Unsaved runs print without writing a file. GP tuning trials (`calibrate.py`) run with progress logging off.
+
+`history.csv` is unchanged and still written at the end of the run: gplearn's `run_details_` for GP and `EpochBinaryMetrics` for NN.
 
 ## 6. Loading a saved run and predicting
 

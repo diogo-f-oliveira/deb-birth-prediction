@@ -11,9 +11,12 @@ from .algorithm import DEBBirthSymbolicClassifier, create_gp_classifier
 from .boundary import GPBoundaryModel, fit_gp_boundary
 from .config import TrainGPConfig
 from .expression import gp_model_text, gp_program_text
+from .generation_hook import fit_with_generation_callback
 from .predict import GPPredictor
+from .progress import gp_progress_logger, gp_validation_callback
 from ...data.schema import DatasetSpec
 from ...evaluate.metrics import BinaryMetrics
+from ...evaluate.progress import PROGRESS_FILENAME
 from ...utils.config import validate_training_mode
 from ...utils.results import resolve_run_config, save_run_metadata
 # from .symbolic import model_program_to_sympy_strings
@@ -29,6 +32,12 @@ def _check_prepared(prepared, cfg):
             raise ValueError("Prepared labels must be binary reached_birth.")
         if (split.log_nu_b is not None) != (cfg.data_spec.formulation == "boundary"):
             raise ValueError("Prepared offsets do not match the formulation.")
+
+
+def _default_run_name(cfg):
+    if cfg.run_name:
+        return cfg.run_name
+    return "DEBBirthGPBoundary" if cfg.data_spec.formulation == "boundary" else "DEBBirthSymbolicClassifier"
 
 
 def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True, *, prepared=None,
@@ -68,14 +77,24 @@ def train_gp_classifier(cfg: TrainGPConfig, save_run: bool = True, *, prepared=N
         "temperature_policy": "fixed training temperature; no calibration performed",
     })
 
+    if cfg.progress_every:
+        data_metadata["progress"] = (f"{PROGRESS_FILENAME}: every {cfg.progress_every} generation(s) and the last, "
+                                     "the generation's lowest raw-loss program on validation; step = generation + 1; "
+                                     "val_bce = unweighted mean BCE of the classification logit")
+
+    # Create the run directory first so progress is saved while training runs.
+    if save_run:
+        cfg = resolve_run_config(cfg, _default_run_name(cfg))
     engine = None
-    if cfg.data_spec.formulation == "boundary":
-        model, engine = fit_gp_boundary(prepared["train"], cfg)
-        history = engine.run_details_
-    else:
-        model = create_gp_classifier(cfg)
-        model.fit(features["train"], targets["train"])
-        history = getattr(model, "run_details_", None)
+    with gp_progress_logger(cfg, cfg.outdir / PROGRESS_FILENAME if save_run else None) as logger:
+        callback = gp_validation_callback(logger, prepared["val"], cfg)
+        if cfg.data_spec.formulation == "boundary":
+            model, engine = fit_gp_boundary(prepared["train"], cfg, generation_callback=callback)
+            history = engine.run_details_
+        else:
+            model = create_gp_classifier(cfg)
+            fit_with_generation_callback(model, callback, features["train"], targets["train"])
+            history = getattr(model, "run_details_", None)
     predictor = GPPredictor(model, cfg.data_spec)
     val_metrics = predictor.evaluate_prepared(prepared["val"])
 
@@ -113,7 +132,7 @@ def save_gp_run(*, model, cfg: TrainGPConfig, val_metrics: BinaryMetrics,
                          model object is restored after saving. If True, the model is saved as-is.
     """
     boundary = isinstance(model, GPBoundaryModel)
-    cfg = resolve_run_config(cfg, cfg.run_name or ("DEBBirthGPBoundary" if boundary else "DEBBirthSymbolicClassifier"))
+    cfg = resolve_run_config(cfg, _default_run_name(cfg))
 
     # Save train config
     cfg.save_json(cfg.outdir / "train_gp_config.json")

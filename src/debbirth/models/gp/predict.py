@@ -17,7 +17,9 @@ class GPPredictor(ParameterPredictor):
     Boundary models use the strict margin > 0 and their saved temperature.
     """
 
-    def __init__(self, model, data_spec):
+    def __init__(self, model, data_spec, *, program=None):
+        """program: evaluate this classifier program instead of model._program
+        (per-generation validation during a fit; see gp/progress.py)."""
         boundary = isinstance(model, GPBoundaryModel)
         if not boundary and not isinstance(model, DEBBirthSymbolicClassifier):
             raise TypeError("Expected a DEBBirthSymbolicClassifier or GPBoundaryModel.")
@@ -26,7 +28,9 @@ class GPPredictor(ParameterPredictor):
         names = model.feature_names if boundary else model.feature_names_no_constants
         if tuple(names) != tuple(data_spec.feature_cols):
             raise ValueError("Model feature order differs from the data_spec feature order.")
-        self.model, self.spec = model, data_spec
+        if boundary and program is not None:
+            raise ValueError("A boundary model already holds its program.")
+        self.model, self.spec, self.program = model, data_spec, program
         self.temperature = model.temperature if boundary else 1.0
 
     def _outputs(self, features, feature_names, offset):
@@ -49,8 +53,9 @@ class GPPredictor(ParameterPredictor):
         if X.ndim != 2 or X.shape[1] != len(self.spec.feature_cols):
             raise ValueError("Incorrect prepared feature shape.")
         model = self.model
+        program = model._program if self.program is None else self.program
         with np.errstate(over="ignore", invalid="ignore"):
-            score = model._program.execute(model._augment_X(X))
+            score = program.execute(model._augment_X(X))
             probability = model._transformer(score)
         if np.isnan(probability).any():
             raise FloatingPointError("GP classifier produced NaN scores.")

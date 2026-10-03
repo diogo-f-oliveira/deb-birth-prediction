@@ -1,6 +1,6 @@
 # Development tasks
 
-Last updated: 2026-10-02
+Last updated: 2026-10-03
 
 ## Objective
 
@@ -17,7 +17,7 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 - Use conda `debbirth` for code execution. Prefer direct scientific checks and small experiments over new test files. Do not create package infrastructure or a general experiment framework just to complete this backlog.
 - This file is a development plan, not a request to start every experiment now. Execute the scope of the active user request; no background scheduling is implied.
 
-**Current task:** None. T01-T07, T06A, T06B, T06C and T08A are complete.
+**Current task:** None. T01-T07, T06A, T06B, T06C, T08A and T08D are complete (T08D.1 plot pending, lower priority).
 
 **Next action:** T06D before relying on simplified GP exports; T14 audit and T15 bounded boundary variant before finalizing T08; T08/T08B before T09. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
 
@@ -263,6 +263,65 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - If pursued, compare policies on validation data only with matched budgets. Record the policy, metric and selected generation with each run, and keep the last-generation policy as the reference.
 - **Done when:** a recorded decision either keeps last-generation selection with rationale, or implements a selectable policy that resolves in configs/tuning and is validated on a small run.
 
+### T08D - Log validation progress at every training step
+
+- [x] **DONE** (2026-10-03; subtask T08D.1 remains TODO) | Dependencies: T05, T06 and T08A. Should precede the T09 runs, so their training histories are comparable across families. Requested by the user on 2026-10-03.
+- **Goal:** track how GP and NN models learn by logging validation performance at every step: one GP generation or one NN epoch. During the run, each step is printed and written to a file in the run directory, so progress is visible while it trains. Training loss is not the target; existing training-side columns may stay but nothing new is added for them.
+- **Current state:**
+  - The NN already evaluates validation loss and metrics every epoch and prints a short line. It writes `history.csv` only when the run ends.
+  - The GP evaluates nothing on validation until the run ends. gplearn's verbose table and `history.csv` show the raw (unpenalized) training loss of the best program and of the population average. Parsimony affects only tournament selection. `history.csv` is also written only at the end.
+- **Shared step record**, with the same column names for both families:
+  - `step`, step kind (`generation`/`epoch`), elapsed wall time;
+  - unweighted validation BCE on the logit scale, computed identically for all formulations. For the boundary model this is BCE of `sigmoid((F - log nu_b)/T)` with the validation offsets. If class weighting is explicitly enabled, the unweighted value stays the common column;
+  - the existing `BinaryMetrics` validation fields, including macro-F1, per-class F1, MCC, AUROC and AP.
+
+  Family-specific columns follow the shared ones: best and average program length for GP; existing columns such as `train_loss` for NN.
+- **Printed output:** one compact line per step in the same format for both families, showing step, validation loss, macro-F1, MCC and per-class F1. GP adds the best program's length. Keep it readable over long runs.
+- **Saved output:** a progress CSV in the run directory. Write the header at the start and append and flush one row per step, so the file can be followed live and an interrupted run keeps its completed steps.
+  - This requires resolving and creating the run directory before training, not at save time. Keep failed or interrupted runs identifiable (see T09).
+  - With saving off, print only.
+  - Decide whether the progress file replaces or complements the existing `history.csv`. Update `docs/gp_formulations.md`, `docs/nn_formulations.md` and `docs/usage_guide.md` accordingly.
+- **GP mechanism:**
+  - At each generation, evaluate on validation the best program selected by gplearn's own rule (lowest raw training loss in that generation). This is the program the run would return if it stopped at that generation, so the curve can be read directly for choosing the number of generations (see T08C).
+  - Evaluate through the inference path (`GPPredictor` / `GPBoundaryModel` semantics), never through the fit-bound boundary metric.
+  - Possible hooks:
+    - override gplearn's per-generation `_verbose_reporter`. It is private, so add it to `check_backend_contract`, and make sure it runs regardless of the gplearn verbose level;
+    - or step generations with `warm_start`. This uses public API, but first confirm it produces exactly the same programs as a single run.
+  - Logging must not change evolution: the final program must be identical with logging on and off.
+- **NN:** keep the existing per-epoch validation pass. Stream it to the progress file and align the column names and printed format with GP. Do not add a full-pass training evaluation.
+- **Scope:** keep the logic in the existing trainers (`train_gp_classifier`, `train_net`), so the CLI, notebooks and tuning inherit it. Allow quiet or less frequent logging where needed, for example inside Ray trials. Reporting intermediate validation to the tuner is outside this task; consider it in T08B.
+- **Done when:**
+  - small GP (normalized and boundary) and NN runs print one line per step and write a progress file that updates during the run;
+  - the final row matches the saved validation metrics;
+  - the final GP program is unchanged with logging on and off;
+  - an interrupted run keeps its completed rows;
+  - the per-step overhead is recorded.
+- **Result (2026-10-03):**
+  - **Shared logger.** `src/debbirth/evaluate/progress.py` holds `ProgressLogger`, `bce_from_logits` (float64, stable for infinite logits) and `progress.csv`.
+  - **GP hook.** `gp/generation_hook.py` adds a mixin to `DEBBirthSymbolicClassifier` and the new `BoundaryEngine` (a `SymbolicRegressor` subclass). The mixin routes gplearn's per-generation `_verbose_reporter` call to a callback.
+    - The override replaces gplearn's reporter rather than calling it, so its source is not part of the contract.
+    - The calling side, `BaseSymbolic.fit`, was already audited. `fit_with_generation_callback` runs `check_backend_contract` and temporarily sets `verbose` to at least 1 so the hook fires.
+  - **GP validation.** `gp/progress.py` scores the generation's lowest raw-loss program (gplearn's own `np.argmin` rule) through `GPPredictor`, which gained an optional `program`. Boundary rows use a `GPBoundaryModel` around that program. Nonfinite validation outputs record a NaN row instead of stopping evolution.
+  - **NN.** `evaluate_pytorch_binary_classifier(..., return_bce=True)` also returns the shared BCE. `train_net` logs through the same logger and keeps `train_loss`/`val_loss` as NN-specific columns.
+  - **Run directories and config.** Both trainers create the run directory before training. `progress_every` (default 1; 0 off) was added to both configs. `calibrate.py` trials run with logging off unless verbose.
+  - **`history.csv`.** Kept unchanged; it is complemented, not replaced.
+  - **Docs.** Updated `docs/usage_guide.md` (new section 5.7), `docs/gp_formulations.md`, `docs/nn_formulations.md`, `README.md` and `AGENTS.md`.
+- **Checks (in `debbirth`, full train/val splits, seed 7, no test data):** runs are in `results/runs/2026-10-03T18-0*_t08d_*`.
+  - **GP normalized and boundary** (population 150, 5 generations, the shipped configs with `verbose=1`):
+    - one line and one CSV row per generation;
+    - the final program and validation metrics are identical with logging off;
+    - the final row equals `metrics/val_metrics.json`, and `val_bce` equals sklearn `log_loss`;
+    - `best_length` matches gplearn's `history.csv`.
+  - **NN normalized and boundary** (3 epochs, CPU, `best_val_loss`): the selected epoch's row equals the saved metrics. `|val_bce - val_loss|` is at most 6e-9 when unweighted.
+  - **`progress_every=2`** logs steps 2, 4 and 5.
+  - **Interruption.** A CLI GP boundary run (`t08d_interrupt`) was watched growing from 0 to 4 rows and then killed; the 4 completed rows remained.
+  - **Archived GP.** It still loads and predicts with the changed class.
+  - **Overhead.** Validation scoring takes about 0.05-0.06 s per generation on 20k validation rows, against generation times of 2-4 s at this small population (about 1-3% of wall time).
+- **Limitation.** An interrupted run's directory has only `progress.csv`; configs and metadata are still written at the end.
+- [ ] **Subtask T08D.1 - Validation-curve plot (lower priority)**
+  - Add a small function in `src/debbirth/plot/` that reads one or more progress files and plots validation loss and selected metrics against the step number or wall time, for either family.
+  - Not required for T08D to be done.
+
 ### T09 - Train, tune, and compare the models
 
 - [ ] **TODO** | Dependencies: T08, T08B, T06A, T06B, and T06C; T08A's CLI (`python -m src.debbirth.train`) is available for command-line execution.
@@ -352,6 +411,9 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - **Done when:** NN and GP bounded variants train, save, reload and predict through the existing workflows. A small run confirms the bounds hold on extreme inputs, `F(gamma, 1) = 0`, decisions are strict and probability decreases with maturity. The variant is included in the T08 protocol as an explicit comparison or ablation.
 
 ## Progress and decisions
+
+- **2026-10-03:** Completed T08D: GP and NN trainers print and stream per-step validation (shared `val_bce` plus `BinaryMetrics`) to `progress.csv` during training. A gplearn generation hook leaves evolution unchanged (identical programs with logging on and off). T08D.1 (plot) remains TODO.
+- **2026-10-03:** Added T08D at the user's request: print and save validation loss and metrics at every GP generation and NN epoch while runs train, using a shared format. A validation-curve plot is lower-priority subtask T08D.1. Clarified that gplearn reports raw (unpenalized) training loss and that parsimony acts only in tournaments. Planning only.
 
 - **2026-10-03:** Expanded the derivation of the k > 1 lower bound (Lemma 6) and stated the bounds on F for all k as (P15) in `docs/birth_equations.md`. Added T15, the bounded boundary formulation `F = L + (U - L) sigmoid(G)` (user-approved idea), and T14, an audit of labels and sampling coverage against the analytical bounds.
 

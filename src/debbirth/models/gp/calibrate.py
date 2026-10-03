@@ -96,6 +96,7 @@ def evaluate_config(config: Dict[str, Any], data_spec: DatasetSpec, random_state
         data_spec=data_spec,
         outdir=None,
         verbose=verbose,
+        progress_every=1 if verbose else 0,  # quiet Ray trials; verbose final runs log validation progress
         seed=random_state,
         num_workers=num_workers,
     )

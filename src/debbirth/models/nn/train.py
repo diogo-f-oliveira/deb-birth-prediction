@@ -4,6 +4,7 @@ import json
 import csv
 from dataclasses import asdict, replace
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Dict, List
 
 import numpy as np
@@ -16,9 +17,16 @@ from .data import load_data_pytorch, tensor_data_from_prepared
 from ...data.scalers import save_scaler, TorchStandardScaler, load_scaler
 from ...evaluate.metrics import compute_pos_weight, EpochBinaryMetrics
 from ...evaluate.predict import evaluate_pytorch_binary_classifier, logits_from_batch
+from ...evaluate.progress import PROGRESS_FILENAME, ProgressLogger
 from ...utils.pytorch import set_seed, resolve_device
 from ...utils.config import validate_training_mode
 from ...utils.results import resolve_run_config, save_run_metadata
+
+
+def _default_run_name(cfg):
+    if cfg.run_name:
+        return cfg.run_name
+    return "DEBBirthBoundaryNet" if cfg.data_spec.formulation == "boundary" else "DEBBirthNet"
 
 
 def save_run_results(cfg: TrainDEBBirthNetConfig, history: List[EpochBinaryMetrics], model: torch.nn.Module,
@@ -32,8 +40,7 @@ def save_run_results(cfg: TrainDEBBirthNetConfig, history: List[EpochBinaryMetri
     selected = next((row for row in history if row.epoch == selected_epoch), None)
     if selected is None:
         raise ValueError("Selected epoch is missing from history.")
-    default_name = "DEBBirthBoundaryNet" if cfg.data_spec.formulation == "boundary" else "DEBBirthNet"
-    cfg = resolve_run_config(cfg, cfg.run_name or default_name)
+    cfg = resolve_run_config(cfg, _default_run_name(cfg))
     outdir = Path(cfg.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
@@ -208,52 +215,64 @@ def train_net(cfg: TrainDEBBirthNetConfig, save: bool = False, *, prepared=None,
     history: List[EpochBinaryMetrics] = []
     selected_epoch, best_loss, selected_state = None, float("inf"), None
 
+    if cfg.progress_every:
+        data_metadata["progress"] = (f"{PROGRESS_FILENAME}: every {cfg.progress_every} epoch(s) and the last; "
+                                     "val_bce = unweighted mean BCE of the classification logit; "
+                                     "val_loss = the training loss function on validation")
+    # Create the run directory first so progress is saved while training runs.
+    if save:
+        cfg = resolve_run_config(cfg, _default_run_name(cfg))
+    logger = ProgressLogger(step_kind="epoch", total_steps=cfg.epochs, every=cfg.progress_every,
+                            path=cfg.outdir / PROGRESS_FILENAME if save else None,
+                            extra_columns=("train_loss", "val_loss"), print_extras=("train_loss",))
+
     # Train epochs (no early stopping)
-    for epoch in range(1, cfg.epochs + 1):
-        model.train()
-        total_train_loss, train_count = 0.0, 0
+    with logger:
+        for epoch in range(1, cfg.epochs + 1):
+            model.train()
+            total_train_loss, train_count = 0.0, 0
 
-        for batch in dataloaders["train"]:
-            optimizer.zero_grad(set_to_none=True)
-            logits, y, _ = logits_from_batch(model, batch, device=device,
-                                              formulation=cfg.data_spec.formulation, temperature=cfg.boundary_temperature)
-            loss = loss_fn(logits, y)
-            if not torch.isfinite(loss) or not torch.isfinite(logits).all():
-                raise FloatingPointError("Nonfinite training loss/logits.")
-            loss.backward()
-            optimizer.step()
+            for batch in dataloaders["train"]:
+                optimizer.zero_grad(set_to_none=True)
+                logits, y, _ = logits_from_batch(model, batch, device=device,
+                                                  formulation=cfg.data_spec.formulation, temperature=cfg.boundary_temperature)
+                loss = loss_fn(logits, y)
+                if not torch.isfinite(loss) or not torch.isfinite(logits).all():
+                    raise FloatingPointError("Nonfinite training loss/logits.")
+                loss.backward()
+                optimizer.step()
 
-            total_train_loss += float(loss.item()) * len(y)
-            train_count += len(y)
+                total_train_loss += float(loss.item()) * len(y)
+                train_count += len(y)
 
-        train_loss = total_train_loss / train_count
+            train_loss = total_train_loss / train_count
 
-        # Validate
-        val_metrics, val_loss = evaluate_pytorch_binary_classifier(
-            model, dataloaders['val'], loss_fn, device=device,
-            formulation=cfg.data_spec.formulation, temperature=cfg.boundary_temperature)
-        if not np.isfinite(val_loss):
-            raise FloatingPointError("Validation must contain rows with finite loss.")
+            # Validate
+            eval_start = perf_counter()
+            val_metrics, val_loss, val_bce = evaluate_pytorch_binary_classifier(
+                model, dataloaders['val'], loss_fn, device=device,
+                formulation=cfg.data_spec.formulation, temperature=cfg.boundary_temperature, return_bce=True)
+            val_eval_s = perf_counter() - eval_start
+            if not np.isfinite(val_loss):
+                raise FloatingPointError("Validation must contain rows with finite loss.")
 
-        # build an EpochBinaryMetrics instance (includes all BinaryMetrics fields + epoch/train_loss/val_loss)
-        epoch_row = EpochBinaryMetrics.from_binary_metrics(
-            val_metrics,
-            epoch=epoch,
-            train_loss=train_loss,
-            val_loss=val_loss,
-        )
-        history.append(epoch_row)
-        if cfg.checkpoint_selection == "final_epoch":
-            selected_epoch = epoch
-        elif val_loss < best_loss:
-            selected_epoch, best_loss = epoch, val_loss
-            selected_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
+            # build an EpochBinaryMetrics instance (includes all BinaryMetrics fields + epoch/train_loss/val_loss)
+            epoch_row = EpochBinaryMetrics.from_binary_metrics(
+                val_metrics,
+                epoch=epoch,
+                train_loss=train_loss,
+                val_loss=val_loss,
+            )
+            history.append(epoch_row)
+            if cfg.checkpoint_selection == "final_epoch":
+                selected_epoch = epoch
+            elif val_loss < best_loss:
+                selected_epoch, best_loss = epoch, val_loss
+                selected_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
 
-        print(
-            f"[{epoch:03d}/{cfg.epochs}] "
-            f"train_loss={train_loss:.4f} val_loss={val_loss:.4f} "
-            f"val_f1_macro={val_metrics.f1_macro:.3f} val_f1_pos={val_metrics.f1_pos:.3f} val_f1_neg={val_metrics.f1_neg:.3f}"
-        )
+            if logger.due(epoch):
+                logger.log(epoch, metrics=val_metrics, val_bce=val_bce, val_eval_s=val_eval_s,
+                           train_loss=train_loss, val_loss=val_loss)
 
     if selected_state is not None:
         model.load_state_dict(selected_state)

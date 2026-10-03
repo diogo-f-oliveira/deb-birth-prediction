@@ -39,7 +39,7 @@ L = sum_i w_i * BCE(y_i, sigmoid((F_i - log_nu_b_i) / T)) / sum_i w_i     over a
 Saved runs keep the existing layout:
 
 - `train_gp_config.json`, `run_metadata.json` (loss, decision rule, final-program policy, temperature policy, data identity) and `metrics/val_metrics.json`.
-- `history.csv`.
+- `history.csv` (gplearn run details, written at the end) and `progress.csv` (per-generation validation, written during training; see `docs/usage_guide.md`).
 - `model/gp_model.joblib`: the classifier, or the `GPBoundaryModel`.
 - `model/best_program.txt`: the exact program.
 - `model/expression.txt`.

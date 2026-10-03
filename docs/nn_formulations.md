@@ -79,7 +79,7 @@ require `data_splits="train_val_test"`; `train_test` remains loader-only.
 - `best_val_loss`: retain the epoch with the lowest validation BCE, with earliest
   epoch winning exact ties; restore its weights after completing all epochs.
 
-`history.csv` records every epoch. `checkpoint.json` records policy, selection
+`history.csv` records every epoch at the end of the run; `progress.csv` records validation progress during it (see `docs/usage_guide.md`). `checkpoint.json` records policy, selection
 metric, selected epoch, selected loss and completed epochs.
 `metrics/val_metrics.json` and returned `val_metrics` describe the selected
 weights. There is no early stopping. The standalone saver requires

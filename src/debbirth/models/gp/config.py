@@ -84,7 +84,10 @@ class TrainGPConfig:
     run_name: Optional[str] = None
 
     low_memory: bool = False
+    # gplearn's own per-generation table; progress logging replaces it unless progress_every=0.
     verbose: int = 0
+    # Validation row every n generations (and the last); 0 disables (T08D).
+    progress_every: int = 1
 
     # Unweighted log loss by default (T06C). "balanced" or {0: w0, 1: w1} is an
     # explicit opt-in, e.g. to reproduce the archived balanced GP.
@@ -104,6 +107,9 @@ class TrainGPConfig:
         if self.data_splits not in SPLIT_TYPES:
             raise ValueError(f"Unknown data_splits {self.data_splits!r}; expected {SPLIT_TYPES}.")
         validate_temperature(self.boundary_temperature)
+        if isinstance(self.progress_every, bool) or not isinstance(self.progress_every, int) \
+                or self.progress_every < 0:
+            raise ValueError("progress_every must be a nonnegative integer (0 disables progress logging).")
         if isinstance(self.class_weights, Mapping):
             if set(self.class_weights) != {0, 1} or not all(
                     isinstance(w, (int, float)) and isfinite(w) and w > 0 for w in self.class_weights.values()):

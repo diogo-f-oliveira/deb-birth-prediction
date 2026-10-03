@@ -226,12 +226,15 @@ def evaluate_pytorch_binary_classifier(
         pos_label: int = 1,
         device: Optional[torch.device] = None,
         *, formulation: Optional[str] = None, temperature: Optional[float] = None,
-) -> Tuple[BinaryMetrics, float]:
+        return_bce: bool = False,
+):
     """Collect loss, probabilities and decisions in one batched forward pass.
 
     Supports legacy tuple batches and aligned dictionary batches. Boundary
     decisions use the margin sign, never rounded sigmoid probabilities.
     loss_fn must return a batch mean (the NN trainer uses BCEWithLogitsLoss).
+    Returns (metrics, loss), or (metrics, loss, bce) with return_bce, where
+    bce is the unweighted float64 logit BCE shared with GP progress (T08D).
     """
     model.eval()
     if formulation is None:
@@ -239,7 +242,7 @@ def evaluate_pytorch_binary_classifier(
     if temperature is None:
         temperature = getattr(model, "temperature", 1.0)
     device = device or next(model.parameters()).device
-    labels, probabilities, decisions = [], [], []
+    labels, probabilities, decisions, all_logits = [], [], [], []
     total_loss, count = 0.0, 0
     for batch in dataloader:
         logits, y, margin = logits_from_batch(model, batch, device=device,
@@ -252,12 +255,18 @@ def evaluate_pytorch_binary_classifier(
         labels.append(y.cpu().numpy())
         probabilities.append(p.cpu().numpy())
         decisions.append(pred.cpu().numpy())
+        if return_bce:
+            all_logits.append(logits.cpu().numpy())
         total_loss += float(loss) * len(y)
         count += len(y)
     if not count:
-        return BinaryMetrics.empty(), float("nan")
-    return metrics_from_predictions(np.concatenate(labels), np.concatenate(probabilities),
-                                    y_pred=np.concatenate(decisions)), total_loss / count
+        return (BinaryMetrics.empty(), float("nan")) + ((float("nan"),) if return_bce else ())
+    y_true = np.concatenate(labels)
+    metrics = metrics_from_predictions(y_true, np.concatenate(probabilities), y_pred=np.concatenate(decisions))
+    if return_bce:
+        from .progress import bce_from_logits
+        return metrics, total_loss / count, bce_from_logits(y_true, np.concatenate(all_logits))
+    return metrics, total_loss / count
 
 
 def logits_from_batch(model, batch, *, device, formulation, temperature):

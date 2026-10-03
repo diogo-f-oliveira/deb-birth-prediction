@@ -23,10 +23,15 @@ from sklearn.utils.class_weight import compute_sample_weight
 
 from .boundary_prototype import check_backend_contract, weighted_boundary_bce
 from .constants import GPConstantSet
+from .generation_hook import GenerationCallbackMixin, fit_with_generation_callback
 from ...data.prepare import PreparedSplit
 from ...formulations import boundary_is_feasible, boundary_margin, validate_temperature
 
 BOUNDARY_FEATURES = (("gamma", "k"), ("gamma", "k", "x_b"))
+
+
+class BoundaryEngine(GenerationCallbackMixin, SymbolicRegressor):
+    """SymbolicRegressor that accepts a per-generation callback; evolution is unchanged."""
 
 
 def _bound_loss(y, F, w, *, expected_y, log_nu_b, temperature):
@@ -103,12 +108,13 @@ class GPBoundaryModel:
         return boundary_is_feasible(self.predict_margin(X, log_nu_b)).astype(int)
 
 
-def fit_gp_boundary(split: PreparedSplit, cfg):
+def fit_gp_boundary(split: PreparedSplit, cfg, *, generation_callback=None):
     """Evolve F on one training PreparedSplit; return (GPBoundaryModel, engine).
 
     The engine carries the dataset-bound metric and run history; use it only
     for diagnostics of this fit. Weights follow cfg.class_weights (None means
-    ordinary mean BCE over active rows).
+    ordinary mean BCE over active rows). generation_callback(engine,
+    run_details) runs after each generation (see generation_hook.py).
     """
     check_backend_contract()
     gp = cfg.gp
@@ -142,7 +148,7 @@ def fit_gp_boundary(split: PreparedSplit, cfg):
     # Direct _Fitness construction avoids make_fitness's two-row probe (see T04 note).
     metric = _Fitness(partial(_bound_loss, expected_y=y, log_nu_b=offset, temperature=temperature),
                       greater_is_better=False)
-    engine = SymbolicRegressor(
+    engine = BoundaryEngine(
         population_size=gp.population_size, generations=gp.generations, tournament_size=gp.tournament_size,
         stopping_criteria=0.0, const_range=None, init_depth=gp.init_depth, init_method=gp.init_method,
         function_set=gp.function_set, metric=metric, parsimony_coefficient=gp.parsimony_coefficient,
@@ -152,7 +158,7 @@ def fit_gp_boundary(split: PreparedSplit, cfg):
         warm_start=False, low_memory=cfg.low_memory, n_jobs=int(cfg.num_workers), verbose=int(cfg.verbose),
         random_state=int(cfg.seed),
     )
-    engine.fit(_augment(X, gp.constants), y, sample_weight=weights)
+    fit_with_generation_callback(engine, generation_callback, _augment(X, gp.constants), y, sample_weight=weights)
     if not np.isfinite(engine._program.raw_fitness_):
         raise RuntimeError("No finite boundary candidate in the last generation.")
     model = GPBoundaryModel.from_engine(engine, feature_names=names, constants=gp.constants,

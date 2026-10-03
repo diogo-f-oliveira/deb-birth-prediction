@@ -8,9 +8,10 @@ from gplearn.genetic import SymbolicClassifier
 from .config import TrainGPConfig
 from .functions import GPFunctionSet
 from .constants import GPConstantSet
+from .generation_hook import GenerationCallbackMixin
 
 
-class DEBBirthSymbolicClassifier(SymbolicClassifier):
+class DEBBirthSymbolicClassifier(GenerationCallbackMixin, SymbolicClassifier):
     """SymbolicClassifier with a fixed, named constant terminal set.
 
     Feature-name convention:
