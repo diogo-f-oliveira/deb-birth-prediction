@@ -247,7 +247,7 @@ Additional checks passed for loss at logits +/-1000, zero weights/nonfinite cand
 
 The boundary run's raw full-subset loss was 0.412410. Its tiny validation subset had macro-F1 0.834668 and MCC 0.673409; these are execution diagnostics, not tuned or publishable performance estimates. Timings include worker-startup effects and are not evidence for backend speed claims. The boundary probe uses stock gplearn add/sub/mul/div/log and ephemeral constants, while the normalized probe uses the existing registered primitives/constants. The stock protected div/log semantics differ from the repository's historical protected primitives. T06 must implement the intended new primitive/constant configuration and check exports; this probe does not choose that experiment's function set.
 
-The accepted paper's practical timeout/error-negative label policy is preserved. Its Section II wording calls the screening inequality sufficient; the displayed constraints imply necessity instead. The PDF is unchanged. Nothing in this prototype establishes the remaining critical-surface proof steps tracked by T07 or equates the numerical solver's failure pattern with the analytical surface.
+The accepted paper's practical timeout/error-negative label policy is preserved. Nothing in this prototype establishes the remaining critical-surface proof steps tracked by T07 or equates the numerical solver's failure pattern with the analytical surface.
 
 ## What alternative backends would add
 

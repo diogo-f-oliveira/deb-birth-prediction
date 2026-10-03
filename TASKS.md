@@ -19,7 +19,7 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 
 **Current task:** None. T01-T07, T06A, T06B, T06C and T08A are complete.
 
-**Next action:** T06D before relying on simplified GP exports; T08/T08B before T09. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
+**Next action:** T06D before relying on simplified GP exports; T14 audit and T15 bounded boundary variant before finalizing T08; T08/T08B before T09. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
 
 ## Model comparison
 
@@ -310,8 +310,49 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - Make this backlog reflect the actual remaining work; add follow-up tasks only when results or the user justify them.
 - **Done when:** another session can reproduce the selected analyses using the recorded environment, data, configurations, and commands, and can identify the next unfinished research step.
 
+### T14 - Audit labels and coverage against the analytical bounds
+
+- [ ] **TODO** | Dependencies: T02 audit outputs, T07 bounds. Informs T15 and T08; does not require new simulations.
+- For every split row, classify the position relative to the proven band:
+  - **certainly infeasible:** `k nu_b >= 1`;
+  - **certainly feasible:** `nu_b` below the lower bound, i.e. `nu_b < 1` for `k <= 1`, or `nu_b < lambda_low^3` for `k > 1`;
+  - **inside the band.**
+- Count label contradictions by solver diagnostic (success, timeout, error):
+  - A feasible label in the certainly infeasible region would be a genuine label or schema error.
+  - An infeasible label in the certainly feasible region shows where the practical label policy (timeouts as infeasible) departs from the mathematics. Check whether these concentrate near the boundary, which would indicate get_lb2 instability there.
+- Report the fraction of rows the model-free rules would resolve, and the band width over `(gamma, k)`.
+- **Coverage check:** the generator `parallel_gen_birth_pred_lhs_bound_v_Hb.m` samples `v_Hb` from `[f^3/k^3, f^3/k]` for `k > 1`, expanded by one decade (`ddec_1`).
+  - The lower edge `f^3/k^3` is the proven limit of the critical maturity as `g -> inf` (Corollary 4 in `docs/birth_equations.md`). It is not proven to be a lower bound at every `g`; that is conjectured.
+  - Check with the observed labels that the sampled band brackets the boundary across `(gamma, k)`, including the extreme-`gamma` corners where T02 found sparse coverage.
+  - An earlier scratch estimate during T07 suggested the critical maturity fell below `f^3/k^3` at small `gamma`. It was a quadrature-resolution artifact: a refined grid gives `Psi -> 1/k` as `gamma -> 0`. It is retracted.
+- **Done when:** a short report in `docs/` with counts, plots and a script under `experiments/` records contradictions by diagnostic and the corner coverage, and states consequences for T15, the label policy and any future sampling (T11).
+
+### T15 - Develop the bounded boundary formulation
+
+- [ ] **TODO** | Dependencies: T07 (bounds), T05/T06 (boundary NN/GP), T06A (predictor). Coordinate with T08 so the variant enters the protocol before T09.
+- **Idea:** build the proven bounds (P15) in `docs/birth_equations.md` into the boundary model. Learn an unrestricted `G(gamma, k[, x_b])` and set `F = L + (U - L) * sigmoid(G)`, with:
+  - `U = -log k`;
+  - `L = 0` for `k <= 1` and `L = 3 log(x_b / (k - 1 + x_b))` for `k > 1`.
+
+  This enforces `F(gamma, 1) = 0`, `sign(F) = sign(1 - k)` and both bounds by construction. Classification stays `sigmoid((F - log nu_b)/T)` with the strict `F - log nu_b > 0` decision.
+- **Implementation:**
+  - Add it as an explicit boundary variant (for example `boundary_bounded`, or a boundary option recorded in the config). Keep the unconstrained boundary model unchanged as the reference.
+  - Compute L and U centrally in `formulations.py` from `(gamma, k)` in a numerically stable log form, valid for all k > 0 including k = 1. The learner sees only G; maturity still enters only through the fixed offset.
+  - NN: the final output is G and the bound map is applied outside the network. GP: evolve G and apply the map in the boundary fitness and in `GPBoundaryModel`.
+  - Saved artifacts, `expression.txt` and the predictor must report F, Psi and the original-variable rule, not only G.
+- **Considerations:**
+  - The sigmoid saturates near the bounds, so check gradients and GP fitness where the band is wide (`k >> 1`, small `x_b`).
+  - Practical labels may conflict with the lower bound wherever get_lb2 times out on analytically feasible points. Run T14 first or alongside, and compare against the unconstrained boundary model rather than replacing it.
+- **Optional:** for `k > 1`, an alternative parametrization learns the critical birth length `lambda_R in (lambda_low, 1)` and sets `Psi = lambda_R^2 (x_b + lambda_R (1 - x_b)) / k`. Consider it only if the bounded F variant motivates it.
+- **Done when:** NN and GP bounded variants train, save, reload and predict through the existing workflows. A small run confirms the bounds hold on extreme inputs, `F(gamma, 1) = 0`, decisions are strict and probability decreases with maturity. The variant is included in the T08 protocol as an explicit comparison or ablation.
+
 ## Progress and decisions
 
+- **2026-10-03:** Expanded the derivation of the k > 1 lower bound (Lemma 6) and stated the bounds on F for all k as (P15) in `docs/birth_equations.md`. Added T15, the bounded boundary formulation `F = L + (U - L) sigmoid(G)` (user-approved idea), and T14, an audit of labels and sampling coverage against the analytical bounds.
+
+  Proved Corollary 4: as `g/f -> inf`, `Psi -> min(1, k^-3)` and `lambda_R -> 1/k`, the asymptote seen in the paper's plots, and the lower bound `lambda_low^3` is asymptotically exact. Whether `Psi > k^-3` for every gamma remains a conjecture.
+
+  The paper's Section II "sufficient but not necessary" wording is a typo for "necessary but not sufficient", per the user. The note about it was removed from the docs, and AGENTS.md now says not to flag it. Planning and documentation only.
 - **2026-10-02:** Completed T07: proved Lemma C (`lambda_R` is the unique zero of D for k > 1), so `nu_b < Psi` is now proven in both directions for all k. Documentation only.
 - **2026-10-02:** T07 partially completed in `docs/birth_equations.md`: feasibility definition, Lemmas 1-6, Theorems 1-2 and Corollary 3. The characterization `nu_b < Psi` is proven for k <= 1. For k > 1 it is proven sufficient; necessity is conditional on the open Lemma C, which is stated precisely. AGENTS.md records this status and the proven bounds on `log Psi`. Documentation only; no code or models changed.
 - **2026-10-02:** Completed T08A: shared training CLI `python -m src.debbirth.train`, with `cli_invocation.json` records. Per the user: hyperparameters stay in configs, and a config's outdir is provenance (fresh run directory unless `--outdir`). Added NN `run_name` for parity with GP. Small GP/NN boundary runs reproduced exactly from their saved configs.

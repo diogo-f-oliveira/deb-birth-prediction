@@ -18,7 +18,7 @@ Here `gamma = g/f`, `nu_b = v_Hb/f^3`, and `log_nu_b = log(v_Hb) - 3*log(f)`. Th
 
 `formulations.boundary_margin(F, log_nu_b)` requires equal shapes, preventing accidental cross-row broadcasting. `output_to_logit` applies the fixed offset and a finite positive scalar `temperature` only for boundary outputs. `output_to_probability(..., sigmoid=...)` accepts a stable backend operation such as `scipy.special.expit` or `torch.sigmoid`; Torch gradients are preserved. `boundary_is_feasible(margin)` uses strict `margin > 0`: equality is infeasible, with no numerical tolerance. Positive temperature does not change this decision. A separately tuned probability threshold is not implemented here.
 
-Unlike the shorthand in `next_steps.md`, `F` is the log critical maturity, not the final classification logit; `Psi` is normalized maturity, and the threshold in physical coordinates is `f^3 * exp(F)`. The accepted PDF's Section II calls `k*v_Hb < f^3` sufficient; the displayed constraints instead imply a necessary screening condition. The PDF is unchanged. T07 remains responsible for completing the analytical proof; the preparation checks below do not establish it. The analytical `k=1` identity is not imposed on a learner by T03.
+Unlike the shorthand in `next_steps.md`, `F` is the log critical maturity, not the final classification logit; `Psi` is normalized maturity, and the threshold in physical coordinates is `f^3 * exp(F)`. The analytical proof is in `birth_equations.md` (T07); the preparation checks below do not establish it. The analytical `k=1` identity is not imposed on a learner by T03.
 
 ## Shared preparation and row identity
 

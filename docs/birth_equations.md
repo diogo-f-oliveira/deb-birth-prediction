@@ -971,13 +971,23 @@ It follows that \(\Phi\) is strictly increasing on every interval of terminal le
 
 ### Lemma 6 (existence of \(\lambda_R\) for \(k>1\))
 
-Let
+**Small eggs are viable.** Viability (8) requires \(k\Phi(\lambda_b)<R(\lambda_b)\). For \(k>1\), (P6) gives \(\Phi(\lambda_b)<\lambda_b^3\): maturity at birth is below its \(k=1\) value, the structural volume \(W_b=\lambda_b^3\). Replacing \(\Phi\) by this overestimate gives a sufficient condition for viability,
 
 \[
-\lambda_{\mathrm{low}}=\frac{\gamma}{k(1+\gamma)-1}\in(0,1).
+D(\lambda_b)=R(\lambda_b)-k\Phi(\lambda_b)>R(\lambda_b)-k\lambda_b^3
+=\lambda_b^2\left[\frac{\gamma+\lambda_b}{1+\gamma}-k\lambda_b\right].
 \]
 
-By (P6), \(D(\lambda_b)>\lambda_b^2\left[(\gamma+\lambda_b)/(1+\gamma)-k\lambda_b\right]\ge0\) for \(\lambda_b\le\lambda_{\mathrm{low}}\). At the other end, \(D(1)=1-k\Phi(1)<0\), again by (P6).
+The bracket is nonnegative exactly when \(\gamma+\lambda_b\ge k\lambda_b(1+\gamma)\), that is, when \(\lambda_b\le\lambda_{\mathrm{low}}\), where
+
+\[
+\lambda_{\mathrm{low}}=\frac{\gamma}{k(1+\gamma)-1}=\frac{x_b}{k-1+x_b}\in(0,1),
+\qquad x_b=\frac{\gamma}{1+\gamma} .
+\]
+
+So \(\lambda_{\mathrm{low}}\) is the terminal length at which the overestimate \(k\lambda_b^3\) of \(k\Phi\) meets the maturation source \(R\); it solves \(k\lambda^3=R(\lambda)\). It lies in \((0,1)\) because \(k(1+\gamma)-1>\gamma\) when \(k>1\). Every egg with \(\lambda_b\le\lambda_{\mathrm{low}}\) is viable.
+
+**The growth-limited egg is not viable.** At \(\lambda_b=1\), \(D(1)=R(1)-k\Phi(1)=1-k\Phi(1)<0\), because \(\Phi(1)>1/k\) by (P6).
 
 \(D\) is continuous (Lemma 3), so its zero set in \([\lambda_{\mathrm{low}},1)\) is nonempty and closed. Define \(\lambda_R\) as its minimum. Then \(\lambda_{\mathrm{low}}<\lambda_R<1\), \((0,\lambda_R)\subseteq V\), and \(D(\lambda_R)=0\), which is Eq. (41). \(\square\)
 
@@ -1112,8 +1122,6 @@ The domination bounds of Lemma 3, locally uniform in \(C\), justify differentiat
 
 The condition is not sufficient. For example, for \(k<1\) every \(\nu_b\in[\Phi(1),1/k)\) is infeasible, and this interval is nonempty by (P6).
 
-The accepted CONTROLO'26 paper calls \(kv_H^b<f^3\) sufficient. This analysis shows it is necessary instead. The PDF is left unchanged.
-
 **(b) Bounds on \(\Psi\).** From (P6) and Lemma 6:
 
 \[
@@ -1123,14 +1131,106 @@ The accepted CONTROLO'26 paper calls \(kv_H^b<f^3\) sufficient. This analysis sh
 \tag{P14}
 \]
 
-For \(k>1\), the lower bound uses \(\Psi=R(\lambda_R)/k\), the fact that \(R\) is increasing, \(\lambda_R>\lambda_{\mathrm{low}}\), and \(R(\lambda_{\mathrm{low}})/k=\lambda_{\mathrm{low}}^3\). Hence
+Each bound has the following source:
+
+- **\(k<1\), lower:** \(\Psi=\Phi(1)>1^3=1\) by (P6) at \(\lambda_b=1\). Maturity at birth exceeds the structural volume when \(k<1\).
+- **\(k<1\), upper:** \(\Psi=\Phi(1)<1/k\) by (P6) at \(\lambda_b=1\).
+- **\(k>1\), upper:** \(k\Psi=R(\lambda_R)<R(1)=1\), because \(R\) is increasing and \(\lambda_R<1\).
+- **\(k>1\), lower:** \(\Psi=R(\lambda_R)/k>R(\lambda_{\mathrm{low}})/k\), because \(R\) is increasing and \(\lambda_R>\lambda_{\mathrm{low}}\) (Lemma 6). Since \(\lambda_{\mathrm{low}}\) solves \(k\lambda^3=R(\lambda)\), this equals \(\lambda_{\mathrm{low}}^3\).
+
+**(c) Bounds on \(F=\log\Psi\).** Written as one statement for all \(k>0\):
 
 \[
-\log\Psi \text{ has the sign of } 1-k,\qquad
-\log\Psi\le-\log k,\ \text{with equality only at } k=1.
+L(\gamma,k)<F(\gamma,k)<U(\gamma,k)\quad(k\ne1),\qquad F(\gamma,1)=L=U=0,
+\tag{P15}
 \]
 
-These bounds are analytical constraints that a learned \(F\approx\log\Psi\) may be checked against.
+\[
+U=-\log k,\qquad
+L=\begin{cases}0,&k\le1,\\[1mm]
+3\log\dfrac{x_b}{k-1+x_b},&k>1,\end{cases}
+\qquad x_b=\frac{\gamma}{1+\gamma}.
+\]
+
+Both \(L\) and \(U\) are continuous in \(k\) and vanish at \(k=1\). Hence \(F\) has the sign of \(1-k\). The width of the band, \(U-L\), grows as \(k\) moves away from 1 and, for \(k>1\), as \(x_b\to0\).
+
+In original variables, with \(x_b=g/(f+g)\), the critical maturity \(v_{H,\mathrm{crit}}^b=f^3\Psi\) satisfies
+
+\[
+f^3<v_{H,\mathrm{crit}}^b<\frac{f^3}{k}\ \ (k<1),\qquad
+\left(\frac{fg}{k(f+g)-f}\right)^3<v_{H,\mathrm{crit}}^b<\frac{f^3}{k}\ \ (k>1).
+\]
+
+**Uses.**
+
+- These bounds are analytical constraints that a learned \(F\approx\log\Psi\) may be checked against or built to satisfy.
+- They also give model-free screening rules. A point is certainly infeasible if \(kv_H^b\ge f^3\). It is certainly feasible if \(v_H^b\) lies below the lower bound: \(v_H^b<f^3\) for \(k\le1\), or \(v_H^b<\big(fg/(k(f+g)-f)\big)^3\) for \(k>1\).
+- The lower bound for \(k>1\) can be loose by several decades when \(x_b\) is small. It becomes exact as \(x_b\to1\), that is, as \(g\to\infty\) (Corollary 4).
+
+### Corollary 4 (the limit \(\gamma\to\infty\))
+
+As \(\gamma\to\infty\) at fixed \(k>0\),
+
+\[
+\Psi(\gamma,k)\to\min\{1,k^{-3}\},\qquad
+\lambda_R\to\frac1k\ (k>1),\qquad
+\lambda_{\mathrm{low}}^3\to k^{-3}\ (k>1).
+\tag{P16}
+\]
+
+The convergence rate is \(O(\log\gamma/\gamma)\). In original variables at fixed \(f\) and \(k\), the critical maturity \(f^3\Psi(g/f,k)\) tends to \(f^3\) for \(k\le1\) and to \((f/k)^3\) for \(k>1\) as \(g\to\infty\). For \(k>1\), the proven lower bound \(\big(fg/(k(f+g)-f)\big)^3\) has the same limit, so it is asymptotically exact.
+
+**Maturity identity.** Integrating Eq. (32) by parts, using \(W(0)=0\), gives
+
+\[
+k\nu(\tau)=W(\tau)+(k-1)\int_0^\tau e^{-k(\tau-s)}\,dW(s).
+\tag{P17}
+\]
+
+At birth, \(dW/d\tau=R(\lambda_b)-\lambda_b^3\) by Eq. (31). So the maturation rate at birth is
+
+\[
+D(\lambda_b)=\frac{dW}{d\tau}\Big|_{\tau_b}-(k-1)\int_0^{\tau_b}e^{-k(\tau_b-s)}\,dW(s).
+\]
+
+Viability therefore compares the current growth rate with an exponentially weighted memory of past growth.
+
+*Proof of (P16).*
+
+**Step 1: development time vanishes.** For \(\gamma\ge2\), the bound \(I_\infty\le\ln(1+\gamma)/(3\gamma^{4/3})\) follows from \((s+\gamma)^{4/3}\ge\gamma^{1/3}(s+\gamma)\). It gives \(A(1,\gamma)\ge\tfrac12(1+\gamma)^{-1/3}\). For \(\lambda_b\le1\), the bracket in Eq. (18) is at least \(A(1,\gamma)\), so
+
+\[
+\lambda(\epsilon)\le\min\Big\{1,\;2\Big(\frac{1+\gamma}{\epsilon+\gamma}\Big)^{1/3}\Big\}.
+\]
+
+Splitting Eq. (25) at \(\epsilon=1+\gamma\),
+
+\[
+\tau_b\le\frac{\ln(1+\gamma)+6}{\gamma},
+\]
+
+uniformly in \(\lambda_b\in(0,1]\).
+
+**Step 2: maintenance has no time to act.** By (P17), \(k(\Phi-\lambda_b^3)=-(k-1)\int_0^{\tau_b}\big(1-e^{-k(\tau_b-s)}\big)\,dW(s)\). Here \(dW\ge0\) (Lemma 2), \(\int dW=\lambda_b^3\), and \(0\le1-e^{-k(\tau_b-s)}\le k\tau_b\). Hence
+
+\[
+\big|\Phi(\lambda_b)-\lambda_b^3\big|\le\delta\,\lambda_b^3,\qquad
+\delta=|k-1|\,\frac{\ln(1+\gamma)+6}{\gamma}\to0 .
+\]
+
+**Step 3: the limits.**
+
+- **\(k\le1\):** \(\Psi=\Phi(1)\to1\).
+- **\(k>1\):** write \(\Phi(\lambda_R)=\lambda_R^3(1+\theta)\) with \(|\theta|\le\delta\). Dividing Eq. (41) by \(\lambda_R^2\) gives \(k\lambda_R(1+\theta)=(\gamma+\lambda_R)/(1+\gamma)\in[x_b,1]\). Hence
+  \[
+  \frac{x_b}{k(1+\delta)}\le\lambda_R\le\frac{1}{k(1-\delta)} ,
+  \]
+  so \(\lambda_R\to1/k\) and \(\Psi=\lambda_R^3(1+\theta)\to k^{-3}\).
+- **\(\lambda_{\mathrm{low}}\):** \(\lambda_{\mathrm{low}}=x_b/(k-1+x_b)\to1/k\) because \(x_b\to1\). \(\square\)
+
+**Interpretation.** For large \(g/f\), development is so fast that maturity maintenance has no time to act, so maturity at birth equals structural volume, \(\nu_b\approx\lambda_b^3\). Growth demand also stops limiting, since \(R\approx\lambda_b^2\). Viability then reduces to \(k\lambda_b<1\).
+
+**Not established.** Whether \(\Psi>k^{-3}\) holds for every \(\gamma\) when \(k>1\) is not proven. If it does, \(v_H^b<(f/k)^3\) would be a model-free sufficient condition for feasibility at every \(g\). The proven statement for all \(\gamma\) is the weaker bound \(\Psi>\lambda_{\mathrm{low}}^3\).
 
 ### Ties and numerical tolerance
 
@@ -1150,7 +1250,9 @@ The practical labels (get_lb2 with a timeout and failures treated as infeasible)
 | \(k\le1\): \(\mathcal F=(0,\Psi)\), strict inequality, \(\Psi(\gamma,1)=1\) (Theorem 1) | Proved |
 | \(k>1\): existence of \(\lambda_R\); \(\nu_b<\Psi\Rightarrow\) feasible (Lemma 6, Theorem 2a-b) | Proved |
 | \(k>1\): unique zero \(\lambda_R\) of \(D\); feasible \(\Rightarrow\nu_b<\Psi\); egg uniqueness (Lemma C, Theorem 2c) | Proved |
-| \(kv_H^b<f^3\) necessary; bounds and sign of \(\log\Psi\) (Corollary 3) | Proved |
+| \(kv_H^b<f^3\) necessary; bounds on \(\Psi\) and \(F\), sign of \(\log\Psi\) (Corollary 3, (P14)-(P15)) | Proved |
+| Limit \(\Psi\to\min\{1,k^{-3}\}\) as \(\gamma\to\infty\); lower bound asymptotically exact (Corollary 4) | Proved |
+| \(\Psi>k^{-3}\) for all \(\gamma\) when \(k>1\) | Not established |
 
 ---
 
