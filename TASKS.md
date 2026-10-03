@@ -325,6 +325,11 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
   - The lower edge `f^3/k^3` is the proven limit of the critical maturity as `g -> inf` (Corollary 4 in `docs/birth_equations.md`). It is not proven to be a lower bound at every `g`; that is conjectured.
   - Check with the observed labels that the sampled band brackets the boundary across `(gamma, k)`, including the extreme-`gamma` corners where T02 found sparse coverage.
   - An earlier scratch estimate during T07 suggested the critical maturity fell below `f^3/k^3` at small `gamma`. It was a quadrature-resolution artifact: a refined grid gives `Psi -> 1/k` as `gamma -> 0`. It is retracted.
+- **Test of the conjectured `f^3/k^3` bound:** the conjecture is `Psi > k^-3` for every gamma when `k > 1`, i.e. `v_Hb < f^3/k^3` implies feasible.
+  - For `k > 1`, count rows with `nu_b < k^-3` (equivalently `v_Hb < f^3/k^3`), separately for the intermediate band `lambda_low^3 <= nu_b < k^-3`, where only the conjecture applies.
+  - Report how many of these rows are labelled infeasible, split by solver diagnostic (success, timeout, error), and where they lie in `(gamma, k)`.
+  - A *successful* get_lb2 run labelled infeasible below `f^3/k^3` would be a candidate counterexample. Inspect it before drawing conclusions. Timeout or error rows there reflect the practical label policy, not the mathematics.
+  - Record whether the data support using `L = -3 log k` (k > 1) as an option in T15, and the `(gamma, k, f)` range the evidence covers. Evidence from labels does not prove the conjecture; keep it labelled as conjectured in `docs/birth_equations.md`.
 - **Done when:** a short report in `docs/` with counts, plots and a script under `experiments/` records contradictions by diagnostic and the corner coverage, and states consequences for T15, the label policy and any future sampling (T11).
 
 ### T15 - Develop the bounded boundary formulation
