@@ -113,7 +113,12 @@ conda run -n debbirth python -m src.debbirth.train --model gp --formulation norm
 - **Precedence.** Dataclass defaults, then the config file, then flags given explicitly. Hyperparameters, including `boundary_temperature`, are set only in the config file.
 - **Output directory.** A config's `outdir` is provenance, not an instruction. Each run gets a new `results/runs/<timestamp>_<name>/` directory unless `--outdir` names a new or empty directory.
 - **Progress.** Each GP generation or NN epoch prints one row of an aligned table with training loss, validation loss, macro-F1, MCC, per-class F1 and elapsed time/ETA. Saved runs append the same row to `progress.csv` as training runs. Set `progress_every` in the config to log less often, or `0` to turn it off. See section 5.7 of `docs/usage_guide.md`.
-- **Saved files.** Each run saves the trainer's usual files plus `cli_invocation.json`. That file holds the arguments, the source config path and hash, the overrides, and a reproduce command.
+- **Quick runs without saving.** `--no-save` trains and validates in memory: the progress table and summary are printed, but no run directory, `progress.csv`, model or `cli_invocation.json` is created. Such a run cannot be reloaded or reproduced from disk. `--outdir` and `--run-name` are rejected with it.
+
+  ```bash
+  conda run -n debbirth python -m src.debbirth.train --model gp --formulation boundary --seed 7 --no-save
+  ```
+- **Saved files.** Each saved run holds the trainer's usual files plus `cli_invocation.json`. That file holds the arguments, the source config path and hash, the overrides, and a reproduce command.
 - **Reproducing a run.** Pass its saved config:
 
   ```bash

@@ -35,7 +35,8 @@ explicitly on the command line. Hyperparameters (including boundary_temperature)
 are set only in the config file. A config's own outdir is treated as provenance:
 each run gets a new results/runs/<timestamp>_<name>/ directory unless --outdir is
 given. To reproduce a saved run, pass its train_*_config.json as --config.
-The test split is never evaluated."""
+With --no-save the run stays in memory: progress and the summary are printed,
+and no directory or file is created. The test split is never evaluated."""
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,6 +57,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", choices=("auto", "cpu", "cuda"), help="NN only: training device")
     parser.add_argument("--dry-run", action="store_true",
                         help="resolve and validate the config, print it and exit without loading data or training")
+    parser.add_argument("--no-save", action="store_true",
+                        help="train and validate in memory only: print progress and the summary, create no run "
+                             "directory or files; the run cannot be reloaded or reproduced from disk")
     return parser
 
 
@@ -63,6 +67,10 @@ def resolve_config(args, parser):
     """Load, check and override the config; no data access or directory creation."""
     if args.model == "gp" and args.device is not None:
         parser.error("--device applies only to --model nn.")
+    if args.no_save:
+        for flag, value in (("--outdir", args.outdir), ("--run-name", args.run_name)):
+            if value is not None:
+                parser.error(f"{flag} names the run directory, which --no-save does not create.")
     config_path = resolve_repo_path(args.config or f"experiments/{args.model}_{args.formulation}.json")
     try:
         raw = json.loads(config_path.read_text(encoding="utf-8"))
@@ -129,7 +137,7 @@ def write_invocation(outdir, args, argv, config_path, overrides):
 
 def print_summary(args, output):
     m = output["val_metrics"]
-    print(f"\nRun directory: {output['outdir']}")
+    print(f"\nRun directory: {output['outdir'] or 'not saved (--no-save)'}")
     print(f"Validation ({args.model}, {args.formulation}): f1_macro={m.f1_macro:.4f} mcc={m.mcc:.4f} "
           f"recall_pos={m.recall_pos:.4f} recall_neg={m.recall_neg:.4f} log_loss={m.log_loss:.4f}")
     print(f"  fp (infeasible accepted)={m.fp}  fn (feasible rejected)={m.fn}  tp={m.tp}  tn={m.tn}")
@@ -148,6 +156,7 @@ def main(argv=None):
     cfg, config_path, overrides = resolve_config(args, parser)
 
     print(f"Model: {args.model}  formulation: {args.formulation}  config: {portable_path(config_path)}")
+    print(f"Saving: {'off (--no-save)' if args.no_save else 'on'}")
     print(f"Overrides: {json.dumps({k: str(v) if isinstance(v, Path) else v for k, v in overrides.items()})}")
     print("Resolved config:\n" + json.dumps(config_dict(cfg), indent=2, sort_keys=True))
     if args.dry_run:
@@ -156,11 +165,12 @@ def main(argv=None):
 
     if args.model == "gp":
         from .models.gp.train import train_gp_classifier
-        output = train_gp_classifier(cfg, save_run=True)
+        output = train_gp_classifier(cfg, save_run=not args.no_save)
     else:
         from .models.nn.train import train_net
-        output = train_net(cfg, save=True)
-    write_invocation(output["outdir"], args, argv, config_path, overrides)
+        output = train_net(cfg, save=not args.no_save)
+    if not args.no_save:
+        write_invocation(output["outdir"], args, argv, config_path, overrides)
     print_summary(args, output)
     return output
 

@@ -164,6 +164,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation norm
 - **Config.** `--config` defaults to `experiments/<model>_<formulation>.json`.
 - **Overrides.** Only runtime and identity settings: `--seed`, `--data-dir`, `--outdir`, `--run-name`, `--num-workers`, and `--device` (NN only). Hyperparameters, including temperature, stay in the config.
 - **Dry run.** `--dry-run` validates and prints the resolved config without loading data.
+- **No save.** `--no-save` trains and validates in memory, printing progress and the summary. It creates no directory or file, so the run cannot be reloaded later. It cannot be combined with `--outdir` or `--run-name`. From Python, the equivalent is `train_gp_classifier(cfg, save_run=False)` or `train_net(cfg, save=False)`.
 - **Output directory.** A config's `outdir` is ignored; each run gets a new directory unless `--outdir` names a new or empty one.
 - **Reproducing a run.** Use `--config results/runs/<run>/train_*_config.json`. `cli_invocation.json` in each CLI run records the exact command.
 - **Not available from the CLI.** Prepared subsets and test evaluation stay in Python.
@@ -311,7 +312,7 @@ best val 0.2798 at gen 5 | best f1_macro 0.8684 at gen 3 | 0:15 total  (* = new 
 - **Markers and repeats.** `*` marks a new best validation loss or macro-F1 at the printed precision. The header repeats every 25 rows.
 - **Summary.** When training finishes, a final line gives the best values and the step where each occurred.
 
-Saved runs also write `progress.csv` in the run directory.
+Saved runs also write `progress.csv` in the run directory. With saving off (`--no-save`, `save_run=False`, `save=False`), progress is printed only and no file is written.
 
 - **Writing.** The header is written at the start, then one row is appended and flushed per step. The file can be followed while the run trains, and an interrupted run keeps its completed rows. The run directory is created before training for this reason, so an interrupted run leaves a directory with only `progress.csv`.
 - **Shared columns.**

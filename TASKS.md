@@ -242,6 +242,18 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
     - Reproductions through `--config <run>/train_*_config.json`: `2026-10-02T18-01-07-652664_t08a_cli_gp/` and `2026-10-02T18-01-22-517688_t08a_cli_nn_repro/`.
     - The reproductions gave an identical GP program, identical NN state dict and checkpoint, equal validation metrics, and identical reloaded validation predictions and probabilities for both families.
     - No test-split evaluation was performed.
+- **Follow-up (2026-10-03, user request): `--no-save`.**
+  - **Behaviour.** The CLI flag trains and validates in memory through the existing `save_run=False` / `save=False` trainer paths. Those paths already create no directory and give the T08D progress logger no file. The CLI prints progress, a summary with `Run directory: not saved (--no-save)`, and a `Saving: off` banner line.
+  - **No trainer changes.** The trainers were not modified. All writes in `src/debbirth/` are inside the save paths, which was checked by inspection.
+  - **Rejected combinations.** `--outdir` and `--run-name` are rejected with `--no-save` before data loading.
+  - **Checks (in `debbirth`):**
+    - `--help` lists the flag.
+    - Both rejected combinations exit with code 2 and a clear message.
+    - CLI GP and NN boundary runs with `--no-save` used the T08A small scratch configs, seed 7 and the full train/val splits. Each printed the progress table and summary.
+    - Their validation metrics equal the saved seed-7 T08A runs (GP fp=1237/fn=1328, NN fp=458/fn=186).
+    - An in-process `main([..., "--no-save"])` returned `outdir=None` and a working predictor.
+    - `results/runs/` and `git status --porcelain --untracked-files=all --ignored` were unchanged across these runs.
+    - A saved 1-epoch NN run (`results/runs/2026-10-03T18-48-59-854380_t08a_nosave_saved_check/`) still wrote `progress.csv` and `cli_invocation.json`.
 
 ### T08B - Integrate experiment configurations with hyperparameter tuning
 
@@ -416,6 +428,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ## Progress and decisions
 
+- **2026-10-03:** Added `--no-save` to the T08A CLI at the user's request: in-memory training and validation with printed progress and no directory or files. CLI and docs only; trainers unchanged.
 - **2026-10-03:** Completed T08D: GP and NN trainers print and stream per-step validation (shared `val_bce` plus `BinaryMetrics`) to `progress.csv` during training. A gplearn generation hook leaves evolution unchanged (identical programs with logging on and off). T08D.1 (plot) remains TODO. Follow-up: shared `train_loss` column and an aligned table printout (banner, best markers, ETA, summary).
 - **2026-10-03:** Added T08D at the user's request: print and save validation loss and metrics at every GP generation and NN epoch while runs train, using a shared format. A validation-curve plot is lower-priority subtask T08D.1. Clarified that gplearn reports raw (unpenalized) training loss and that parsimony acts only in tournaments. Planning only.
 

@@ -109,6 +109,7 @@ These load `experiments/gp_full_par.json` and `experiments/nn_full_par.json`, tr
 The shared training CLI (T08A) is `conda run -n debbirth python -m src.debbirth.train --model {gp,nn} --formulation {full_par,normalized,boundary} [--config ...]`. It is a thin wrapper around `train_gp_classifier`/`train_net`. Keep training logic in those functions.
 - **Overrides.** Only runtime and identity settings: seed, data directory, outdir, run name, workers, and NN device. Hyperparameters, including temperature, stay in config JSON.
 - **Output directory.** A config's `outdir` is ignored unless `--outdir` is passed, so a saved `train_*_config.json` reproduces a run in a new directory.
+- **No save.** `--no-save` runs in memory: progress is printed and nothing is written (no directory, `progress.csv`, model or invocation record).
 - **Fail-fast checks.** Invalid family/config/formulation combinations fail before data loading.
 - **Test data.** The CLI never evaluates the test split.
 
