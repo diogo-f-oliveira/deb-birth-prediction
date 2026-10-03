@@ -17,8 +17,11 @@ GP_EXTRA_COLUMNS = ("best_length", "average_length")
 
 
 def gp_progress_logger(cfg, path=None):
+    title = (f"GP {cfg.data_spec.formulation} | {cfg.gp.generations} generations | "
+             f"population {cfg.gp.population_size} | seed {cfg.seed}")
     return ProgressLogger(step_kind="generation", total_steps=cfg.gp.generations, every=cfg.progress_every,
-                          path=path, extra_columns=GP_EXTRA_COLUMNS, print_extras=("best_length",))
+                          path=path, title=title, extra_columns=GP_EXTRA_COLUMNS,
+                          print_extras={"best_length": ("len", 4)})
 
 
 def gp_validation_callback(logger, split, cfg):
@@ -47,7 +50,8 @@ def gp_validation_callback(logger, split, cfg):
         except (ValueError, FloatingPointError):
             # Nonfinite validation outputs: record the step rather than stopping evolution.
             metrics, val_bce = None, float("nan")
-        logger.log(step, metrics=metrics, val_bce=val_bce, val_eval_s=perf_counter() - start,
+        logger.log(step, train_loss=float(run_details["best_fitness"][-1]), metrics=metrics, val_bce=val_bce,
+                   val_eval_s=perf_counter() - start,
                    best_length=int(program.length_), average_length=float(run_details["average_length"][-1]))
 
     return callback

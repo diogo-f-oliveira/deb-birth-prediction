@@ -224,7 +224,9 @@ def train_net(cfg: TrainDEBBirthNetConfig, save: bool = False, *, prepared=None,
         cfg = resolve_run_config(cfg, _default_run_name(cfg))
     logger = ProgressLogger(step_kind="epoch", total_steps=cfg.epochs, every=cfg.progress_every,
                             path=cfg.outdir / PROGRESS_FILENAME if save else None,
-                            extra_columns=("train_loss", "val_loss"), print_extras=("train_loss",))
+                            title=(f"NN {cfg.data_spec.formulation} | {cfg.epochs} epochs | "
+                                   f"checkpoint {cfg.checkpoint_selection} | seed {cfg.seed} | device {device}"),
+                            extra_columns=("val_loss",))
 
     # Train epochs (no early stopping)
     with logger:
@@ -271,8 +273,8 @@ def train_net(cfg: TrainDEBBirthNetConfig, save: bool = False, *, prepared=None,
                 selected_state = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
 
             if logger.due(epoch):
-                logger.log(epoch, metrics=val_metrics, val_bce=val_bce, val_eval_s=val_eval_s,
-                           train_loss=train_loss, val_loss=val_loss)
+                logger.log(epoch, train_loss=train_loss, metrics=val_metrics, val_bce=val_bce, val_eval_s=val_eval_s,
+                           val_loss=val_loss)
 
     if selected_state is not None:
         model.load_state_dict(selected_state)

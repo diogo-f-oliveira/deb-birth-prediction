@@ -287,23 +287,41 @@ To reproduce the historical balanced setting, use `gp_full_par_balanced.json`. T
 
 ### 5.7 Validation progress during training
 
-Every GP generation and NN epoch is scored on the validation split while the run is training (T08D). Each step prints one line in the same format for both families, for example:
+Every GP generation and NN epoch is scored on the validation split while the run is training (T08D). Both families print the same aligned table:
 
 ```text
-[generation 4/5] val_bce=0.2799 f1_macro=0.8684 mcc=0.7369 f1_pos=0.8473 f1_neg=0.8895 | best_length=13 | 8.9s
-[epoch 2/3] val_bce=0.0699 f1_macro=0.9731 mcc=0.9463 f1_pos=0.9691 f1_neg=0.9770 | train_loss=0.1062 | 7.5s
+GP boundary | 5 generations | population 150 | seed 7
+progress: results/runs/2026-10-03T18-25-16-108724_t08d_gp_boundary/progress.csv
+gen |   train      val  | f1_macro      mcc   f1_pos   f1_neg  |  len  |    time     eta
+----+-------------------+--------------------------------------+-------+----------------
+  1 |  0.2989   0.3013  |   0.8473   0.6949   0.8214   0.8731  |   14  |    0:06    0:22
+  2 |  0.2829   0.2857* |   0.8631*  0.7271   0.8449   0.8813  |   19  |    0:08    0:12
+  3 |  0.2793   0.2799* |   0.8684*  0.7369   0.8473   0.8895  |   13  |    0:10    0:06
+  4 |  0.2793   0.2799  |   0.8684   0.7369   0.8473   0.8895  |   13  |    0:12    0:03
+  5 |  0.2790   0.2798* |   0.8684   0.7369   0.8475   0.8893  |   10  |    0:15    0:00
+best val 0.2798 at gen 5 | best f1_macro 0.8684 at gen 3 | 0:15 total  (* = new best)
 ```
 
-Saved runs also write `progress.csv` in the run directory. The path is printed when training starts.
+- **Banner.** Model family, formulation, number of steps, seed and the `progress.csv` path.
+- **Columns.**
+  - `train` is the training loss. For GP it is the generation's best raw training loss (gplearn's `best_fitness`). For NN it is the running minibatch mean during the epoch, with dropout on.
+  - `val` is `val_bce` (below).
+  - GP adds `len`, the best program's length.
+  - `time` is the elapsed time and `eta` the estimated time remaining.
+- **Markers and repeats.** `*` marks a new best validation loss or macro-F1 at the printed precision. The header repeats every 25 rows.
+- **Summary.** When training finishes, a final line gives the best values and the step where each occurred.
+
+Saved runs also write `progress.csv` in the run directory.
 
 - **Writing.** The header is written at the start, then one row is appended and flushed per step. The file can be followed while the run trains, and an interrupted run keeps its completed rows. The run directory is created before training for this reason, so an interrupted run leaves a directory with only `progress.csv`.
 - **Shared columns.**
   - `step_kind` (`generation`/`epoch`) and `step`, the number of completed generations or epochs. For GP this is gplearn's generation index + 1, so the last step equals `generations`.
   - `elapsed_s` (since training began) and `val_eval_s` (time to score this step).
+  - `train_loss`, as in the printed `train` column. It is the loss each family optimizes, so it is weighted when class weighting is enabled. The GP value is a full-pass loss of the best program and the NN value is an in-epoch running mean, so the two are not strictly comparable.
   - `val_bce`: the unweighted mean BCE of the classification logit on validation, computed in float64 for every formulation. For boundary models the logit is `(F - log nu_b)/T`. It stays unweighted when class weighting is enabled.
   - Every `BinaryMetrics` field: macro-F1, per-class precision/recall/F1, MCC, AUROC/AP, confusion counts, log loss and Brier score.
 - **GP columns.** `best_length` and the population `average_length`. Each GP row scores the generation's lowest raw-loss program, which is the program the run would return if it stopped at that step. Logging only reads the population, so the final program is identical with logging on or off. gplearn's own `verbose` table is not printed while progress logging is on.
-- **NN columns.** `train_loss` (running minibatch mean during the epoch) and `val_loss`, the training loss function on validation (weighted when `use_pos_weight` is on) and used by `best_val_loss`. With `best_val_loss`, the saved metrics correspond to the selected epoch's row, not necessarily the last.
+- **NN column.** `val_loss`, the training loss function on validation. It is weighted when `use_pos_weight` is on, and `best_val_loss` uses it. With `best_val_loss`, the saved metrics correspond to the selected epoch's row, not necessarily the last.
 - **Frequency.** `progress_every` in the training config (GP and NN, default 1) logs every n-th step and always the last; `0` disables progress logging. For GP, `progress_every=0` restores gplearn's `verbose` table. Unsaved runs print without writing a file. GP tuning trials (`calibrate.py`) run with progress logging off.
 
 `history.csv` is unchanged and still written at the end of the run: gplearn's `run_details_` for GP and `EpochBinaryMetrics` for NN.

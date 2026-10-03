@@ -318,6 +318,10 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
   - **Archived GP.** It still loads and predicts with the changed class.
   - **Overhead.** Validation scoring takes about 0.05-0.06 s per generation on 20k validation rows, against generation times of 2-4 s at this small population (about 1-3% of wall time).
 - **Limitation.** An interrupted run's directory has only `progress.csv`; configs and metadata are still written at the end.
+- **Follow-up (2026-10-03, user request):**
+  - **Training loss.** `train_loss` is now a shared column for both families. GP: the best program's raw training loss (gplearn `best_fitness`). NN: the running epoch mean. The two are not strictly comparable, which the user accepts.
+  - **Printout.** An aligned ASCII table replaces the key=value line. It has a run banner, a header repeated every 25 rows, `*` for a new best validation loss/macro-F1 (compared at printed precision), elapsed time/ETA, and a closing best-values summary.
+  - **Checks.** The GP `train_loss` column equals gplearn's `best_fitness` exactly. All earlier checks (identical programs on/off, final row equals saved metrics, NN `val_bce` vs `val_loss`) passed again. A synthetic logger run rendered nonfinite/inf rows and the repeated header correctly.
 - [ ] **Subtask T08D.1 - Validation-curve plot (lower priority)**
   - Add a small function in `src/debbirth/plot/` that reads one or more progress files and plots validation loss and selected metrics against the step number or wall time, for either family.
   - Not required for T08D to be done.
@@ -412,7 +416,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ## Progress and decisions
 
-- **2026-10-03:** Completed T08D: GP and NN trainers print and stream per-step validation (shared `val_bce` plus `BinaryMetrics`) to `progress.csv` during training. A gplearn generation hook leaves evolution unchanged (identical programs with logging on and off). T08D.1 (plot) remains TODO.
+- **2026-10-03:** Completed T08D: GP and NN trainers print and stream per-step validation (shared `val_bce` plus `BinaryMetrics`) to `progress.csv` during training. A gplearn generation hook leaves evolution unchanged (identical programs with logging on and off). T08D.1 (plot) remains TODO. Follow-up: shared `train_loss` column and an aligned table printout (banner, best markers, ETA, summary).
 - **2026-10-03:** Added T08D at the user's request: print and save validation loss and metrics at every GP generation and NN epoch while runs train, using a shared format. A validation-curve plot is lower-priority subtask T08D.1. Clarified that gplearn reports raw (unpenalized) training loss and that parsimony acts only in tournaments. Planning only.
 
 - **2026-10-03:** Expanded the derivation of the k > 1 lower bound (Lemma 6) and stated the bounds on F for all k as (P15) in `docs/birth_equations.md`. Added T15, the bounded boundary formulation `F = L + (U - L) sigmoid(G)` (user-approved idea), and T14, an audit of labels and sampling coverage against the analytical bounds.

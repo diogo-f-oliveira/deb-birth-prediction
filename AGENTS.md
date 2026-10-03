@@ -112,7 +112,7 @@ The shared training CLI (T08A) is `conda run -n debbirth python -m src.debbirth.
 - **Fail-fast checks.** Invalid family/config/formulation combinations fail before data loading.
 - **Test data.** The CLI never evaluates the test split.
 
-T08D: both trainers create the run directory before training and stream per-step validation to `progress.csv`, one row per GP generation or NN epoch. The format is shared, with an unweighted logit-BCE `val_bce` and the `BinaryMetrics` fields. Each GP row scores the generation's lowest raw-loss program through `GPPredictor`. GP uses a callback through gplearn's `_verbose_reporter` (`gp/generation_hook.py`), which reads the population and must not change evolution. `progress_every` (default 1; 0 off) is in both configs. See `docs/usage_guide.md` section 5.7.
+T08D: both trainers create the run directory before training and stream per-step validation to `progress.csv`, one row per GP generation or NN epoch. The format is shared, with `train_loss` (the optimized loss), an unweighted logit-BCE `val_bce` and the `BinaryMetrics` fields; the printout is an aligned table. Each GP row scores the generation's lowest raw-loss program through `GPPredictor`. GP uses a callback through gplearn's `_verbose_reporter` (`gp/generation_hook.py`), which reads the population and must not change evolution. `progress_every` (default 1; 0 off) is in both configs. See `docs/usage_guide.md` section 5.7.
 
 NN configs, like GP configs, accept `run_name`. The NN default run directory suffix is `DEBBirthNet`, or `DEBBirthBoundaryNet` for boundary runs.
 
