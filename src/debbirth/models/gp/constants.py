@@ -57,3 +57,12 @@ DEFAULT_CONSTANT_SET: GPConstantSet = tuple(resolve_constant(name) for name in (
 EXTENDED_CONSTANT_SET: GPConstantSet = DEFAULT_CONSTANT_SET + tuple(
     resolve_constant(name) for name in ("c1_2", "c1_3", "sqrt2", "sqrt3")
 )
+
+# Named sets selectable by tuning scripts (as NAMED_FUNCTION_SETS); JSON stores the resolved names.
+NAMED_CONSTANT_SETS = {
+    "none": NO_CONSTANT_SET,
+    "default": DEFAULT_CONSTANT_SET,
+    "extended": EXTENDED_CONSTANT_SET,
+    # The set used by the shipped experiment configs: extended plus the zero constant.
+    "extended_c0": EXTENDED_CONSTANT_SET + (resolve_constant("c0"),),
+}

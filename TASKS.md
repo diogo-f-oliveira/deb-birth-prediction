@@ -17,13 +17,13 @@ Develop normalized and critical-boundary birth-feasibility models for both GP an
 - Use conda `debbirth` for code execution. Prefer direct scientific checks and small experiments over new test files. Do not create package infrastructure or a general experiment framework just to complete this backlog.
 - This file is a development plan, not a request to start every experiment now. Execute the scope of the active user request; no background scheduling is implied.
 
-**Current task:** None. T01-T07, T06A, T06B, T06C, T08A and T08D are complete (T08D.1 plot pending, lower priority).
+**Current task:** None. T01-T07, T06A, T06B, T06C, T08A, T08B and T08D are complete (T08D.1 plot pending, lower priority).
 
-**Next action:** T06D before relying on simplified GP exports; T14 audit and T15 bounded boundary variant before finalizing T08; T08/T08B before T09. Follow the active user request. JSON-based tuning integration remains T08B, before T09.
+**Next action:** T06D before relying on simplified GP exports; T14 audit and T15 bounded boundary variant before finalizing T08; T08 before T09. Follow the active user request. JSON-based tuning (T08B) is available; T08 fixes the final search spaces and budgets.
 
 ## Model comparison
 
-**Before final experiments:** the revised GP function set (T06B) and unweighted classifier defaults (T06C) are implemented in configs and the existing tuner; T08B must carry them into JSON-based tuning. These are prerequisites for T09; historical artifacts retain their recorded settings.
+**Before final experiments:** the revised GP function set (T06B) and unweighted classifier defaults (T06C) are implemented in the configs; the T08B tuner builds every trial from those JSONs and adds no weighting. These are prerequisites for T09; historical artifacts retain their recorded settings.
 
 | Formulation | GP | NN | Role |
 | --- | --- | --- | --- |
@@ -257,7 +257,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ### T08B - Integrate experiment configurations with hyperparameter tuning
 
-- [ ] **TODO** | Dependencies: T03 for the existing GP path; T05/T06 for the new NN/GP variants. Use T08 for full-experiment search budgets and selection rules. T08A is not required: tuning calls the same Python trainers.
+- [x] **DONE** (2026-10-04) | Dependencies: T03 for the existing GP path; T05/T06 for the new NN/GP variants. Use T08 for full-experiment search budgets and selection rules. T08A is not required: tuning calls the same Python trainers.
 - Load a base experiment JSON through the family dataclass loader. Construct each trial from that base plus sampled overrides; preserve all unsearched settings, including formulation, data paths, split policy, preprocessing, weights, and runtime options. Do not mutate the base config between trials.
 - Keep search-space definitions in small Python experiment scripts initially, using the existing Ray/HyperOpt approach where suitable. Avoid embedding executable distributions in ordinary training JSON or introducing a general configuration framework. Inspect optional tuning dependencies in `debbirth` before executing a tuning check.
 - Map sampled values to actual config fields explicitly. Compute dependent parameters such as tournament size, crossover probability, and mutation shares before validating the resolved trial config. Reject unknown or unused override keys instead of silently ignoring `gp_config_params`; use the same resolution when rerunning the selected trial.
@@ -266,7 +266,37 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 - Preserve matched data/subset identities and use validation data for selection. Follow T08 for training-temperature searches versus post-training calibration; held-out test evaluation stays explicit and separate from the search.
 - Save the base configuration, search specification/script identity, search seed/budget/objective, sampled trial parameters, and fully resolved ordinary training JSON for each trial. The selected run must retain its resolved output path, model/scaler state, metrics, and data/code provenance and be reproducible without invoking the tuner.
 - **Done when:** tiny GP and NN tuning runs exercise fixed settings, sampled overrides, dependent parameters, and named constant/function choices as applicable; selected artifacts reload consistently, and a selected run can be reproduced from its saved training JSON with matching data and seed. Record actual commands, resolved configurations, and validation results without full tuning or a new test framework.
-- **Current gap (2026-09-07):** The existing GP tuner constructs configs independently of the JSON examples, uses hardcoded named function/constant sets, and ignores extra GP configuration overrides. No JSON-based tuning integration or end-to-end tuning verification is claimed yet. The best-model saving regression was corrected separately under T03 on 2026-09-08.
+- **Gap before T08B (2026-09-07):** The existing GP tuner constructs configs independently of the JSON examples, uses hardcoded named function/constant sets, and ignores extra GP configuration overrides. No JSON-based tuning integration or end-to-end tuning verification is claimed yet. The best-model saving regression was corrected separately under T03 on 2026-09-08.
+- **Result (2026-10-04):**
+  - **Environment.** Ray 2.58.0 and HyperOpt 0.3.0 are now installed in `debbirth` (they were absent in September) and listed in `requirements.txt`.
+  - **Module.** `src/debbirth/tuning.py` serves both families:
+    - `resolve_trial(base_cfg, family, params)` maps every key explicitly. It computes the dependent parameters: `tournament_fraction` gives the tournament size; the operator group `p_reproduction`, `p_mutation_total`, `mutation_u1`, `mutation_u2` gives crossover and Dirichlet mutation shares (the transform moved from `calibrate.py`); NN `n_layers`/`width` give `hidden_dims`.
+    - It resolves named function/constant sets through the registries; `NAMED_CONSTANT_SETS` is new, including `extended_c0`, the set used by the shipped configs.
+    - It rejects unknown, conflicting, incomplete and tuner-managed keys (`seed`, data settings, `outdir`, `run_name`), and checks operator probabilities.
+    - `run_search` checks the space and resolves a sample before starting Ray, loads data once, and passes only train/val to trials.
+  - **Outputs** (user decisions: every trial is a full saved run, and the selected trial is not retrained):
+    - every trial is a normal run under `results/tune/<ts>_<name>/runs/<trial_id>/`, plus `trial.json`;
+    - the search directory holds `search.json` (base identity and resolved settings, script hash, space, objective, budget, seeds, versions), `run_metadata.json`, `base_config.json`, `trials.csv` and `best.json` (with the CLI reproduce command).
+  - **Base snapshot.** Trials reload the base from `base_config.json` rather than receiving a pickled config. Unpickled gplearn primitives are copies that the registry cannot identify; the first tiny GP search failed for this reason before the fix.
+  - **Example spaces.** `experiments/tune_gp.py` and `tune_nn.py` hold example spaces as starting points for T08.
+  - **Old tuner removed.** `calibrate.py` is deleted at the user's request. The T06C class-weight check in `experiments/validate_t06bc.py` now inspects `tuning.py`.
+- **Checks (in `debbirth`, full train/val splits, no test data):**
+  - **Direct `resolve_trial` checks:**
+    - 14 rejection cases;
+    - the derived tournament size and operator probabilities match the formulas;
+    - named sets resolve to registered names, and `hidden_dims` comes from `n_layers`/`width`;
+    - base configs are unchanged after 200 resolutions, and explicit base weighting is preserved;
+    - the example spaces resolve 20 random samples against all six shipped configs.
+  - **Tiny GP search** `results/tune/2026-10-04T11-35-31_t08b_gp_check/` (boundary; population 100, 3 generations; 4 trials, 2 concurrent):
+    - fixed entries, sampled keys, the operator group and a named `constants` choice were exercised;
+    - all trials completed, and the saved configs match the sampled values (e.g. tournament 13 = int(100 x 0.13), crossover 0.49).
+  - **Tiny NN search** `results/tune/2026-10-04T11-37-05_t08b_nn_check/` (normalized; 2 epochs; 4 trials) also completed, including `n_layers`/`width`.
+  - **Reload.** Both selected trials reload, and their re-evaluated validation metrics equal the saved ones.
+  - **Reproduction** through the CLI from the saved training JSON (`results/runs/*_t08b_gp_repro`, `*_t08b_nn_repro`): identical GP program, identical NN state dict and checkpoint, equal validation metrics, and identical predictions.
+  - The updated `check_config_resolution` passes.
+- **Limitations.**
+  - With concurrent trials, HyperOpt's proposal sequence depends on completion order, so a search is not exactly repeatable. Individual trials are.
+  - Ray prints worker-shutdown stack noise on Windows at the end of a search; results are unaffected.
 
 ### T08C - Consider GP final-program selection as a hyperparameter
 
@@ -428,6 +458,7 @@ conda run -n debbirth python -m src.debbirth.train --model nn --formulation boun
 
 ## Progress and decisions
 
+- **2026-10-04:** Completed T08B: `src/debbirth/tuning.py` with example scripts `experiments/tune_{gp,nn}.py` (Ray Tune 2.58 + HyperOpt 0.3, now in `requirements.txt`). Per the user: every trial is a saved run, the selected trial is the artifact (no retraining), and `calibrate.py` is removed. Tiny GP/NN searches completed; their selected trials reloaded and reproduced exactly through the CLI.
 - **2026-10-03:** Added `--no-save` to the T08A CLI at the user's request: in-memory training and validation with printed progress and no directory or files. CLI and docs only; trainers unchanged.
 - **2026-10-03:** Completed T08D: GP and NN trainers print and stream per-step validation (shared `val_bce` plus `BinaryMetrics`) to `progress.csv` during training. A gplearn generation hook leaves evolution unchanged (identical programs with logging on and off). T08D.1 (plot) remains TODO. Follow-up: shared `train_loss` column and an aligned table printout (banner, best markers, ETA, summary).
 - **2026-10-03:** Added T08D at the user's request: print and save validation loss and metrics at every GP generation and NN epoch while runs train, using a shared format. A validation-curve plot is lower-priority subtask T08D.1. Clarified that gplearn reports raw (unpenalized) training loss and that parsimony acts only in tournaments. Planning only.

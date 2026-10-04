@@ -136,6 +136,28 @@ Training settings can be customized through:
 
 The example settings are not necessarily identical to the archived model settings. In particular, the GP example uses a different parsimony coefficient and includes an additional zero constant.
 
+### Hyperparameter tuning
+
+`src/debbirth/tuning.py` runs Ray Tune with HyperOpt (TPE) over any of the six models, starting from an experiment JSON. The search spaces live in small scripts, `experiments/tune_gp.py` and `experiments/tune_nn.py`. Their spaces are starting points; final spaces and budgets are set in T08.
+
+```bash
+conda run -n debbirth python -m experiments.tune_gp --formulation boundary --num-samples 50
+```
+
+```bash
+conda run -n debbirth python -m experiments.tune_nn --formulation normalized --num-samples 50 --max-concurrent 8
+```
+
+- **Search spaces.** A space mixes fixed values and Ray domains. Every key maps explicitly onto a config field. Unknown keys are rejected, as are conflicting keys and keys the tuner manages (`seed`, data settings, `outdir`).
+- **Derived parameters.** Some keys are computed from others:
+  - GP: `tournament_fraction` gives the tournament size, and the group `p_reproduction`, `p_mutation_total`, `mutation_u1`, `mutation_u2` gives the crossover and mutation probabilities;
+  - NN: `n_layers` and `width` give `hidden_dims`;
+  - named function and constant sets resolve through the registries.
+- **Trials.** Every trial is a normal saved run in `results/tune/<timestamp>_<name>/runs/<trial_id>/`, with an extra `trial.json`. The search directory also holds `search.json` (base config, script, space, objective, budget, versions), `base_config.json`, `trials.csv` and `best.json`.
+- **Selection and data.** Selection uses validation macro-F1 by default. The selected trial is the final artifact, with no retraining. Trials only receive train/val rows, so no test evaluation happens.
+- **Reproducing the selected trial.** `best.json` gives the CLI command, `python -m src.debbirth.train ... --config <run>/train_*_config.json`.
+- **Concurrency.** `--max-concurrent` limits parallel trials. CPUs per trial default to the GP `num_workers` (all CPUs if -1), or 1 + `num_workers` for NN. With concurrent trials, the HyperOpt proposal order depends on completion order.
+
 ## Saved models and analysis
 
 The repository includes trained artifacts under `results/models/`.

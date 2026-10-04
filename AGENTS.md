@@ -58,7 +58,8 @@ Follow `docs/next_steps.md`, implementing the part relevant to the user's curren
 
 - `src/debbirth/data/`: MATLAB simulation generators; Python schema, loading, splitting, and scaling. Centralize reusable transformations here rather than duplicating notebook formulas.
 - `src/debbirth/formulations.py`: learned-output, boundary-margin, logit, and strict decision semantics. Formulation identifiers are `full_par`, `normalized`, and `boundary`.
-- `src/debbirth/models/gp/`: configuration, custom primitives/constants, training, tuning, and symbolic/MATLAB export. `calibrate.py` currently performs hyperparameter search; do not confuse it with probability calibration.
+- `src/debbirth/models/gp/`: configuration, custom primitives/constants, training, and symbolic/MATLAB export.
+- `src/debbirth/tuning.py` and `experiments/tune_{gp,nn}.py`: JSON-based hyperparameter search for both families (T08B), with search spaces in the scripts. It replaced the former GP tuner `calibrate.py`. Hyperparameter search is not probability calibration.
 - `src/debbirth/models/nn/`: PyTorch architecture, configuration, training, and loading.
 - `src/debbirth/evaluate/` and `src/debbirth/plot/`: shared metrics, comparisons, and decision-boundary plots.
 - `src/debbirth/utils/results.py`: run-directory and figure-output helpers.
@@ -95,7 +96,7 @@ Use the existing conda environment `debbirth` for running repository code, noteb
 conda run -n debbirth python -c "import sys; print(sys.executable)"
 ```
 
-An activated `debbirth` environment is equivalent. Do not silently substitute system Python, a bundled runtime, or a new environment for repository execution. Inspect the existing environment before installing dependencies; do not reinstall `requirements.txt` as a routine setup step. Inspect imports before running optional workflows: GP tuning imports Ray Tune and HyperOpt, which are not listed in the current requirements. Do not assume a dependency installation reproduces the paper's environment without checking versions.
+An activated `debbirth` environment is equivalent. Do not silently substitute system Python, a bundled runtime, or a new environment for repository execution. Inspect the existing environment before installing dependencies; do not reinstall `requirements.txt` as a routine setup step. Hyperparameter tuning needs Ray Tune 2.58 and HyperOpt 0.3; both are installed in `debbirth` and listed in `requirements.txt`. Do not assume a dependency installation reproduces the paper's environment without checking versions.
 
 The existing training examples are:
 

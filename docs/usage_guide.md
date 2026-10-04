@@ -59,6 +59,7 @@ PreparedSplit  (one per split, rows kept aligned)                 data/prepare.p
 | Metrics | `src/debbirth/evaluate/predict.py`, `metrics.py` | `metrics_from_predictions`, `BinaryMetrics` (now with MCC, log loss, Brier) |
 | Plots | `src/debbirth/plot/boundary.py` | Original or normalized axes, critical curves and surfaces |
 | Experiment settings | `experiments/*.json` | One JSON per model; validation scripts alongside |
+| Tuning | `src/debbirth/tuning.py`, `experiments/tune_{gp,nn}.py` | Ray Tune + HyperOpt from a base JSON; every trial a saved run (T08B) |
 | Training CLI | `src/debbirth/train.py` | `python -m src.debbirth.train --model … --formulation …` (T08A) |
 
 The main behavioural changes:
@@ -323,9 +324,41 @@ Saved runs also write `progress.csv` in the run directory. With saving off (`--n
   - Every `BinaryMetrics` field: macro-F1, per-class precision/recall/F1, MCC, AUROC/AP, confusion counts, log loss and Brier score.
 - **GP columns.** `best_length` and the population `average_length`. Each GP row scores the generation's lowest raw-loss program, which is the program the run would return if it stopped at that step. Logging only reads the population, so the final program is identical with logging on or off. gplearn's own `verbose` table is not printed while progress logging is on.
 - **NN column.** `val_loss`, the training loss function on validation. It is weighted when `use_pos_weight` is on, and `best_val_loss` uses it. With `best_val_loss`, the saved metrics correspond to the selected epoch's row, not necessarily the last.
-- **Frequency.** `progress_every` in the training config (GP and NN, default 1) logs every n-th step and always the last; `0` disables progress logging. For GP, `progress_every=0` restores gplearn's `verbose` table. Unsaved runs print without writing a file. GP tuning trials (`calibrate.py`) run with progress logging off.
+- **Frequency.** `progress_every` in the training config (GP and NN, default 1) logs every n-th step and always the last; `0` disables progress logging. For GP, `progress_every=0` restores gplearn's `verbose` table. Unsaved runs print without writing a file. Tuning trials (section 5.8) keep their own `progress.csv`; their printed output goes to Ray's per-trial log files.
 
 `history.csv` is unchanged and still written at the end of the run: gplearn's `run_details_` for GP and `EpochBinaryMetrics` for NN.
+
+### 5.8 Hyperparameter tuning (T08B)
+
+A search starts from an ordinary experiment JSON (the base config) and a search space. The space is a dict of fixed values and Ray Tune domains, defined in a small script:
+
+```text
+conda run -n debbirth python -m experiments.tune_gp --formulation boundary --num-samples 50 [--config base.json] [--max-concurrent N]
+conda run -n debbirth python -m experiments.tune_nn --formulation normalized --num-samples 50
+```
+
+From Python, call `run_search(family=..., base_config=..., space=..., name=..., num_samples=...)` in `src/debbirth/tuning.py`. `resolve_trial(base_cfg, family, params)` shows how one sampled point becomes a training config, without running anything.
+
+| Family | Direct keys (config fields) | Derived keys |
+| --- | --- | --- |
+| GP | `population_size`, `generations`, `tournament_size`, `parsimony_coefficient`, `init_depth`, `init_method`, `p_crossover`, `p_*_mutation`, `p_point_replace`, `function_set`, `constants`, `boundary_temperature`, `class_weights`, `progress_every`, `verbose`, `num_workers` | `tournament_fraction` gives `tournament_size = max(2, int(pop * fraction))`; `p_reproduction`, `p_mutation_total`, `mutation_u1`, `mutation_u2` (together) give `p_crossover = 1 - p_reproduction - p_mutation_total` and Dirichlet mutation shares |
+| NN | `epochs`, `batch_size`, `lr`, `weight_decay`, `scaling_type`, `checkpoint_selection`, `boundary_temperature`, `use_pos_weight`, `progress_every`, `num_workers`, `device`, `hidden_dims`, `dropout` | `n_layers`, `width` (together) give `hidden_dims = [width] * n_layers` |
+
+- **Named sets.** `function_set` and `constants` accept a registered set name (`NAMED_FUNCTION_SETS`; `NAMED_CONSTANT_SETS`: `none`, `default`, `extended`, `extended_c0`) or a list of registered names.
+- **Rejected keys.** Unknown keys, a derived key combined with the field it determines, incomplete groups, and tuner-managed keys (`seed`, `data_spec`, `data_dir`, `data_splits`, `outdir`, `run_name`) are rejected. All trials share the base seed; repeated seeds are T09.
+- **Weighting.** The tuner never adds weighting. An explicit `class_weights` or `use_pos_weight` in the base config is kept and recorded.
+- **Fail-fast checks.** Before Ray starts, the space is checked and one sampled point (plus any `points_to_evaluate`) is resolved.
+- **Data.** The data are loaded once, and each trial receives the same row-aligned train/val records. Test data never reach the tuner.
+- **Output** in `results/tune/<timestamp>_<name>/`:
+  - `search.json`: base config identity and resolved settings, script hash, space description, objective, budget, HyperOpt seed, Ray/HyperOpt versions;
+  - `run_metadata.json`: code and data provenance;
+  - `base_config.json`: trials reload the base from this snapshot by registered names;
+  - `runs/<trial_id>/`: a complete run directory per trial, plus `trial.json` (sampled params and changed config fields);
+  - `ray/`: Ray state and per-trial logs;
+  - `trials.csv` and `best.json`.
+- **Selection.** The objective is validation `f1_macro` (max) by default; any `BinaryMetrics` field can be used. On ties, the first trial in trial-id order wins. The selected trial is the final artifact: it is not retrained. `best.json` gives the command that reproduces it through the training CLI.
+- **Reproducibility.** Each trial is reproducible from its saved config. With concurrent trials, HyperOpt's sequence of proposals depends on completion order, so the search itself is not exactly repeatable.
+- **Temperature.** `boundary_temperature` can be searched as a training temperature: each candidate is fit on train and selected on validation. Whether to search it, and post-training calibration, are T08 decisions.
 
 ## 6. Loading a saved run and predicting
 
@@ -448,6 +481,5 @@ All use sampled train/validation rows, never test data, and write to `results/ru
 
 ## 11. Not available yet
 
-- **Hyperparameter tuning.** `models/gp/calibrate.py` is the historical GP tuner. It needs Ray Tune and HyperOpt, which are not installed in `debbirth`, and does not read the JSON configs. JSON-based tuning for GP and NN is T08B, and the temperature protocol is T08.
 - **Simplified exports.** `symbolic.py` simplified SymPy/MATLAB output drops the protected semantics of `pdiv`, `plog` and the real `cbrt` (T06D). Use `expression.txt` or the predictor.
-- **Final settings.** Example configs and the small runs here are engineering checks; final settings and comparisons are T08/T09.
+- **Final settings.** Example configs, example search spaces and the small runs here are engineering checks; final settings, spaces, budgets and comparisons are T08/T09.

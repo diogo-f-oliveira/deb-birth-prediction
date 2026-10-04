@@ -67,10 +67,12 @@ def check_config_resolution():
     assert resolved["gp_boundary"]["feature_order"] == ["gamma", "k", "x_b"]
     # Explicit legacy settings remain selectable.
     assert TrainGPConfig(gp=GPConfig(), data_spec=spec, class_weights={0: 1.2, 1: 0.8}).class_weights
-    # The tuner needs Ray/HyperOpt (absent), so inspect how it builds trials.
-    tree = ast.parse((REPO_ROOT / "src/debbirth/models/gp/calibrate.py").read_text(encoding="utf-8"))
-    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and getattr(n.func, "id", None) == "TrainGPConfig"]
-    assert calls and not any(k.arg == "class_weights" for c in calls for k in c.keywords)
+    # The tuner (T08B, replacing calibrate.py) builds trials from the base JSON and must not
+    # hardcode weighting: no call passes class_weights/use_pos_weight and no "balanced" literal.
+    tree = ast.parse((REPO_ROOT / "src/debbirth/tuning.py").read_text(encoding="utf-8"))
+    calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
+    assert not any(k.arg in ("class_weights", "use_pos_weight") for c in calls for k in c.keywords)
+    assert not any(isinstance(n, ast.Constant) and n.value == "balanced" for n in ast.walk(tree))
     return resolved
 
 
